@@ -1341,16 +1341,29 @@ function sanitizeLinks(rows) {
     });
   }
   let tree = computeTree(rows);
+  // Cheap checks first; the per-link cycle test below is O(n) per link, so it
+  // only runs when the graph actually has a cycle.
+  for (const t of rows) {
+    if (t.kind === 'section') continue;
+    t.preds = t.preds.filter((l) => {
+      const p = tree.byId.get(l.id);
+      if (!p || p.kind === 'section') {
+        dropped.push({ succId: t.id, predId: l.id, reason: 'missing' });
+        return false;
+      }
+      if (isAncestor(tree, l.id, t.id) || isAncestor(tree, t.id, l.id)) {
+        dropped.push({ succId: t.id, predId: l.id, reason: 'A summary task cannot be linked to one of its own subtasks.' });
+        return false;
+      }
+      return true;
+    });
+  }
+  if (!hasCycle(rows, tree)) return dropped;
   for (const t of rows) {
     if (t.kind === 'section') continue;
     const all = t.preds;
     t.preds = [];
     for (const l of all) {
-      const p = tree.byId.get(l.id);
-      if (!p || p.kind === 'section') {
-        dropped.push({ succId: t.id, predId: l.id, reason: 'missing' });
-        continue;
-      }
       const err = linkError(rows, l.id, t.id, tree);
       if (err) dropped.push({ succId: t.id, predId: l.id, reason: err });
       else t.preds.push(l);
