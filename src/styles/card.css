@@ -1,0 +1,36 @@
+.card {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(470px, 100vw); z-index: 40; background: var(--bg);
+  border-left: 1px solid var(--line); box-shadow: var(--shadow); display: flex; flex-direction: column;
+}
+.card[hidden] { display: none; }
+.card-head { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.card-outline { font-weight: 700; color: var(--muted); min-width: 28px; }
+.card-name { flex: 1; font-size: 15px; font-weight: 600; }
+.card-body { overflow: auto; padding: 12px 14px 20px; flex: 1; }
+.fgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.fld { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.fld input, .fld select { color: var(--fg); font-size: 13px; }
+.span2 { grid-column: span 2; }
+.chk { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.card-sec { margin-top: 16px; }
+.card-sec h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 6px; display: flex; align-items: center; gap: 8px; }
+.md { border: 1px solid var(--grid); border-radius: 6px; padding: 4px 10px; background: var(--panel); }
+.md p { margin: 6px 0; }
+.md ul { margin: 6px 0; padding-left: 20px; }
+.md code { background: var(--panel2); padding: 0 3px; border-radius: 3px; }
+.preds { width: 100%; border-collapse: collapse; font-size: 12px; }
+.preds th { text-align: left; font-weight: 600; color: var(--muted); padding: 2px 4px; }
+.preds td { padding: 2px 4px; vertical-align: middle; }
+.preds td:first-child { display: flex; align-items: center; gap: 6px; max-width: 250px; }
+.pr-ref { width: 56px; }
+.pr-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pr-lag { width: 60px; }
+.pr-add-row { display: flex; gap: 6px; margin-top: 6px; }
+.pr-add-row input { flex: 1; }
+.succ { font-size: 12px; color: var(--muted); }
+.chip-link { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 0 8px; cursor: pointer; font-size: 12px; margin: 2px 0; }
+.cf { display: flex; gap: 6px; margin-bottom: 6px; }
+.cf-k { width: 36%; }
+.cf-v { flex: 1; }
+.card-foot { margin-top: 20px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.stamp { font-size: 11px; color: var(--muted); }

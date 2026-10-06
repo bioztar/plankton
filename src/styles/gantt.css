@@ -1,0 +1,18 @@
+.gt-scroll { height: 100%; overflow: auto; position: relative; background: var(--bg); }
+.gt-head { position: sticky; top: 0; z-index: 3; height: 44px; }
+.gt-head svg { display: block; }
+.gt-body { position: relative; }
+.gt-win { position: absolute; left: 0; }
+.gt-win svg { display: block; overflow: visible; }
+.gt-over { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+.gt-tmp { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 3; fill: none; }
+.gt-tip { position: absolute; z-index: 6; background: var(--fg); color: var(--bg); font-size: 12px; padding: 3px 7px; border-radius: 5px; pointer-events: none; white-space: nowrap; }
+.gt-win .bar { cursor: grab; }
+.readonly .gt-win .bar, .gt-win .bar.sum { cursor: default; }
+.gt-win .bar .hd { fill: var(--bg); stroke: var(--accent); stroke-width: 1.5; opacity: 0; cursor: crosshair; }
+.gt-win .bar:hover .hd, .gt-win .bar.link-target .hd { opacity: 1; }
+.gt-win .bar .rz { fill: transparent; cursor: ew-resize; }
+.gt-win .bar.link-target .b { stroke: var(--accent); stroke-width: 3; }
+.gt-win .lk { cursor: pointer; }
+.gt-win .lk:hover .ln { stroke: var(--accent); stroke-width: 2.6; stroke-dasharray: none; marker-end: url(#g-mh); }
+.gt-win .lbl { pointer-events: none; }

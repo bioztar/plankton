@@ -1,0 +1,20 @@
+.board { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 12px; padding: 12px; height: 100%; overflow: auto; align-items: start; }
+.bcol { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; min-height: 160px; display: flex; flex-direction: column; }
+.bcol.over { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--sel); }
+.bcol h3 { margin: 0; padding: 10px 12px; font-size: 13px; display: flex; align-items: center; border-bottom: 1px solid var(--line); }
+.bcol h3 .cnt { margin-left: auto; color: var(--muted); font-weight: 400; }
+.bcards { padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.bcard { background: var(--bg); border: 1px solid var(--line); border-left: 4px solid var(--sec); border-radius: 7px; padding: 8px 10px; cursor: grab; }
+.bcard:hover { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12); }
+.bcard.sel { border-color: var(--accent); border-left-color: var(--sec); }
+.bcard.dragging { opacity: 0.45; }
+.bc-top { display: flex; gap: 6px; align-items: center; font-size: 11px; color: var(--muted); }
+.bc-sec { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bc-top .prio { margin-left: auto; }
+.bc-name { font-weight: 600; margin: 3px 0; }
+.bc-parent { font-size: 11px; color: var(--muted); }
+.bc-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.overdue-txt { color: var(--danger); font-weight: 600; }
+.bc-prog { height: 4px; background: var(--panel2); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+.bc-prog span { display: block; height: 100%; background: var(--ok); }
+.bc-empty { margin: 8px; font-size: 12px; }

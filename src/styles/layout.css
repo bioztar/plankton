@@ -1,0 +1,63 @@
+#app { height: 100vh; display: flex; flex-direction: column; }
+.top { display: flex; align-items: center; gap: 14px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+.banner { display: flex; align-items: center; gap: 10px; padding: 6px 12px; font-size: 13px; border-bottom: 1px solid var(--warn); background: color-mix(in srgb, var(--warn) 14%, var(--bg)); }
+.banner[hidden] { display: none; }
+.banner-text { font-weight: 600; }
+.brand { font-size: 22px; color: var(--accent); line-height: 1; }
+.plan-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pm-row1 { display: flex; align-items: center; gap: 6px; }
+.plan-name { font-size: 17px; font-weight: 700; border-color: transparent; background: transparent; width: 26ch; padding: 2px 6px; }
+.plan-name:hover { border-color: var(--line); }
+.save-state { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.save-state.err { color: var(--danger); font-weight: 600; }
+.ro-badge { display: none; font-size: 11px; font-weight: 700; color: var(--warn); border: 1px solid currentColor; border-radius: 10px; padding: 0 8px; }
+.readonly .ro-badge { display: inline-block; }
+.pm-row2 { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.pm-row2 label { display: flex; align-items: center; gap: 4px; }
+.pm-row2 input, .pm-row2 select { padding: 1px 4px; font-size: 12px; color: var(--fg); }
+.pm-row2 input[data-p="owner"] { width: 14ch; }
+.stats { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 14px; border: 1px solid var(--line); background: var(--bg); font-size: 12px; white-space: nowrap; }
+button.chip { cursor: pointer; }
+button.chip:hover { background: var(--hover); }
+.chip.bad { color: var(--danger); border-color: var(--danger); }
+.chip.conf { color: var(--conf); border-color: var(--conf); font-weight: 600; }
+.chip .bar-mini { width: 40px; height: 5px; border-radius: 3px; background: var(--panel2); overflow: hidden; display: inline-block; }
+.chip .bar-mini span { display: block; height: 100%; background: var(--ok); }
+.top-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.tab { border: 0; background: var(--bg); padding: 0 12px; height: 28px; cursor: pointer; border-right: 1px solid var(--line); }
+.tab:last-child { border-right: 0; }
+.tab[aria-selected="true"] { background: var(--accent); color: var(--accent-fg); font-weight: 600; }
+.unlock { display: none; }
+.readonly .unlock { display: inline-flex; }
+.exit-present { display: none; }
+.presenter .exit-present { display: inline-flex; }
+.toolbar { display: flex; align-items: center; gap: 6px 14px; padding: 6px 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.tb-group { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.tb-lbl { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+.tb-lbl select { color: var(--fg); height: 28px; padding: 0 4px; }
+.filters { margin-left: auto; }
+.filters .search { width: 190px; height: 28px; }
+.filters select { height: 28px; max-width: 140px; }
+.filters.active .search, .filters select.on { border-color: var(--accent); }
+.views { flex: 1; min-height: 0; position: relative; }
+.view { position: absolute; inset: 0; }
+.view[hidden] { display: none; }
+.view-plan { display: flex; }
+.grid-pane { width: var(--grid-w, 55%); min-width: 200px; flex: none; position: relative; }
+.splitter { width: 6px; flex: none; cursor: col-resize; background: var(--panel); border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.splitter:hover, .splitter:focus-visible { background: var(--accent); }
+.gantt-pane { flex: 1; min-width: 0; position: relative; }
+.view-board, .view-logs { overflow: auto; }
+body.drop-on::after {
+  content: "Drop a .json plan (or a .csv / .tsv table) to import"; position: fixed; inset: 12px; z-index: 300;
+  border: 3px dashed var(--accent); border-radius: 16px; background: rgba(43, 95, 212, 0.12); display: flex;
+  align-items: center; justify-content: center; font-size: 20px; font-weight: 700; color: var(--accent); pointer-events: none;
+}
+.readonly .edit-only, .presenter .edit-only { display: none !important; }
+.view-board-on .plan-only, .view-logs-on .plan-only, .view-logs-on .filters { display: none !important; }
+@media (max-width: 900px) {
+  .stats { margin-left: 0; }
+  .filters { margin-left: 0; }
+}

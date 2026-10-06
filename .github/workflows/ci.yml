@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Unit tests
+        run: npm test
+      - name: Build
+        run: node build.mjs
+      - name: Fail if dist/ is stale
+        run: |
+          if ! git diff --exit-code --stat -- dist/; then
+            echo "::error::dist/ is out of date. Run 'npm run build' and commit dist/planboard.html."
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain -- dist/)" ]; then
+            git status --porcelain -- dist/
+            echo "::error::Untracked files in dist/. Run 'npm run build' and commit them."
+            exit 1
+          fi

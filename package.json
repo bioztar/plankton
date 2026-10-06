@@ -1,0 +1,16 @@
+{
+  "name": "planboard",
+  "version": "1.0.0",
+  "description": "Single-file HTML project planner: nested tasks, sections, task cards, Gantt with FS/SS/FF/SF dependencies.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test",
+    "check": "node build.mjs --check"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED"
+}
