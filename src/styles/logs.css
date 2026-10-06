@@ -1,0 +1,11 @@
+.logs { padding: 14px 16px 40px; max-width: 1300px; }
+.log-sec { margin-bottom: 26px; }
+.log-sec h2 { font-size: 16px; margin: 0 0 8px; }
+.log-sec h2 .cnt { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 6px; }
+.log { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.log th { text-align: left; font-size: 12px; color: var(--muted); padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.log td { padding: 3px 4px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+.log td textarea, .log td input, .log td select { width: 100%; }
+.log td textarea { min-height: 34px; resize: vertical; }
+.log-act { text-align: center; }
+.log-add { margin-top: 8px; }

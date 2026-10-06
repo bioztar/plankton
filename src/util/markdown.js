@@ -37,7 +37,7 @@ function inline(escaped) {
     links.push(html);
     return `\u0001${links.length - 1}\u0001`;
   };
-  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, t, u) => stash(link(t, u)));
+  s = s.replace(/\[([^\]]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g, (_, t, u) => stash(link(t, u)));
   s = s.replace(/(^|[\s(])((?:https?:\/\/|mailto:)[^\s<]+[^\s<.,;:!?)])/gi, (_, pre, u) => pre + stash(link(u, u)));
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');

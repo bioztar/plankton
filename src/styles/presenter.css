@@ -1,0 +1,11 @@
+body.presenter { font-size: 15px; }
+.presenter .top { padding: 10px 16px; }
+.presenter .plan-name { font-size: 22px; }
+.presenter .pm-row2 input, .presenter .pm-row2 select { border-color: transparent; background: transparent; pointer-events: none; font-size: 13px; appearance: none; -webkit-appearance: none; }
+.presenter .chip { font-size: 14px; padding: 4px 11px; }
+.presenter .gr { font-size: 15px; }
+.presenter .gh { font-size: 13px; }
+.presenter .gsvg { font-size: 13px; }
+.presenter .gsvg .lbl { font-size: 13px; }
+.presenter .filters { display: none; }
+.readonly .pm-row2 input, .readonly .pm-row2 select, .readonly .plan-name { pointer-events: none; border-color: transparent; background: transparent; }

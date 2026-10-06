@@ -235,7 +235,7 @@ export function normalizePlan(input) {
     const cols = {};
     for (const [k, v] of Object.entries(s.columns)) {
       if (/^\w{1,30}$/.test(k) && v && typeof v === 'object') {
-        cols[k] = { visible: v.visible !== false, width: Math.max(30, Math.min(800, +v.width || 0)) || undefined };
+        cols[k] = { visible: v.visible !== false, ...(v.explicit ? { explicit: true } : {}), width: Math.max(30, Math.min(800, +v.width || 0)) || undefined };
       }
     }
     plan.settings.columns = cols;
