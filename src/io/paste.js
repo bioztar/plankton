@@ -1,6 +1,6 @@
 // Paste import: parse TSV/CSV copied from spreadsheets / planning tools,
 // auto-detect columns and date order, and turn it into plan rows. Pure.
-import { fromYMD, toISO, parseISO, nextWorkday, prevWorkday, startFromDuration, durationFromDates, daysInMonth } from '../schedule/calendar.js';
+import { MIN_YEAR, MAX_YEAR, fromYMD, toISO, parseISO, nextWorkday, prevWorkday, startFromDuration, durationFromDates, daysInMonth } from '../schedule/calendar.js';
 import { parseLinkToken } from '../schedule/links.js';
 import { computeTree, normalizeLevels } from '../model/tree.js';
 import { createTask, createSection, STATUSES, PALETTE } from '../model/plan.js';
@@ -121,6 +121,7 @@ const DATE_RE = /^(\d{1,4})[/.-](\d{1,2})[/.-](\d{1,4})(?:[ T].*)?$/;
 
 function ymd(y, m, d) {
   if (y < 100) y += 2000;
+  if (y < MIN_YEAR || y > MAX_YEAR) return null;
   if (m < 1 || m > 12 || d < 1 || d > daysInMonth(y, m)) return null;
   return toISO(fromYMD(y, m, d));
 }

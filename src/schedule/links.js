@@ -1,6 +1,7 @@
 // Dependency links: parsing/formatting "4FS+2d" style text and the date maths of
 // the four link types. Lag is in working days (negative = lead).
 import {
+  clampLag,
   addWorkdays,
   startFromDuration,
   finishFromDuration,
@@ -28,6 +29,7 @@ export function parseLinkToken(token) {
     const unit = (m[5] || 'd').toLowerCase();
     if (unit.startsWith('w')) lag *= 5;
     if (m[3] === '-') lag = -lag;
+    lag = clampLag(lag);
   }
   return { ref: m[1], type: (m[2] || 'FS').toUpperCase(), lag };
 }

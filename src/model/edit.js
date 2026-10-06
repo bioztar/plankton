@@ -5,7 +5,7 @@ import { linkError } from '../schedule/engine.js';
 import { computeTree, leavesOf, insertionPoint, isTask, blockRange } from './tree.js';
 import { createTask, createSection, STATUSES, PRIORITIES } from './plan.js';
 import {
-  parseISO, toISO, isISODate, nextWorkday, wdIndex, fromWdIndex, applyDateEdit, finishFromDuration, durationFromDates,
+  clampDuration, clampLag, parseISO, toISO, isISODate, nextWorkday, wdIndex, fromWdIndex, applyDateEdit, finishFromDuration, durationFromDates,
 } from '../schedule/calendar.js';
 
 /** Keep status and progress consistent after one of them changed. */
@@ -35,7 +35,7 @@ export function setTaskField(task, field, value, pinned) {
     case 'duration': {
       if (field !== 'duration' && !isISODate(value)) return 'Enter a date as YYYY-MM-DD.';
       if (field === 'duration' && !/^\s*\d+\s*d?\s*$/i.test(String(value))) return 'Duration is a whole number of working days.';
-      const v = field === 'duration' ? parseInt(value, 10) : value;
+      const v = field === 'duration' ? clampDuration(parseInt(value, 10)) : value;
       if (field === 'duration' && v === 0) task.milestone = true;
       else if (field === 'duration' && task.milestone) task.milestone = false;
       const r = applyDateEdit(task, field, v, pinned);
@@ -138,7 +138,7 @@ export function addLink(rows, predId, succId, type = 'FS', lag = 0) {
     if (saved) succ.preds.splice(existing, 0, saved);
     return err;
   }
-  const link = { id: predId, type, lag: Math.round(+lag || 0) };
+  const link = { id: predId, type, lag: clampLag(lag) };
   if (existing >= 0) succ.preds.splice(existing, 0, link);
   else succ.preds.push(link);
   return null;

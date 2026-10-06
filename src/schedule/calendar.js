@@ -5,21 +5,44 @@
 const DAY_MS = 86400000;
 const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
+export const MIN_YEAR = 1900;
+export const MAX_YEAR = 2200;
+/** Upper bound for a task duration and |lag|, in working days (~38 years). */
+export const MAX_DURATION = 10000;
+export const MAX_LAG = 10000;
+
+/** Coerce to an integer in [lo, hi]; non-numbers become `dflt`. */
+export function clampInt(v, lo, hi, dflt = 0) {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return dflt;
+  return Math.max(lo, Math.min(hi, n));
+}
+
+export const clampDuration = (v, dflt = 0) => clampInt(v, 0, MAX_DURATION, dflt);
+export const clampLag = (v) => clampInt(v, -MAX_LAG, MAX_LAG, 0);
+
 export function isISODate(s) {
   if (typeof s !== 'string') return false;
   const m = ISO_RE.exec(s);
   if (!m) return false;
   const y = +m[1], mo = +m[2], d = +m[3];
-  if (mo < 1 || mo > 12 || d < 1) return false;
+  if (y < MIN_YEAR || y > MAX_YEAR || mo < 1 || mo > 12 || d < 1) return false;
   return d <= daysInMonth(y, mo);
 }
 
+// Date.UTC maps years 0–99 to 1900–1999, so set the full year explicitly.
+function utcMs(y, m0, d) {
+  const dt = new Date(0);
+  dt.setUTCFullYear(y, m0, d);
+  return dt.getTime();
+}
+
 export function daysInMonth(y, m) {
-  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return new Date(utcMs(y, m, 0)).getUTCDate();
 }
 
 export function fromYMD(y, m, d) {
-  return Math.round(Date.UTC(y, m - 1, d) / DAY_MS);
+  return Math.round(utcMs(y, m - 1, d) / DAY_MS);
 }
 
 export function toYMD(day) {
@@ -146,13 +169,13 @@ export function mondayOf(day) {
 export function applyDateEdit(task, field, value, pinned) {
   let start = parseISO(task.start);
   let finish = parseISO(task.finish);
-  let dur = task.duration | 0;
+  let dur = clampDuration(task.duration);
   const milestone = !!task.milestone;
   const defaults = { start: 'duration', finish: 'start', duration: 'start' };
   if (!pinned || pinned === field) pinned = defaults[field];
   if (field === 'start') start = nextWorkday(parseISO(value));
   else if (field === 'finish') finish = prevWorkday(parseISO(value));
-  else dur = Math.max(0, Math.round(Number(value) || 0));
+  else dur = clampDuration(value);
   if (Number.isNaN(start) || Number.isNaN(finish)) return null;
   const recompute = ['start', 'finish', 'duration'].find((f) => f !== field && f !== pinned);
   if (recompute === 'finish') {
