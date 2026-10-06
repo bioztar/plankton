@@ -77,6 +77,7 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; borde
 .toasts { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; }
 .toast { background: var(--fg); color: var(--bg); padding: 8px 14px; border-radius: 8px; box-shadow: var(--shadow); max-width: 640px; transition: opacity 0.35s; pointer-events: auto; }
 .toast-error { background: var(--danger); color: #fff; }
+.toast-warn { background: #9a4a00; color: #fff; }
 .toast.out { opacity: 0; }
 #print-root { display: none; }
 
@@ -149,7 +150,7 @@ dialog::backdrop { background: rgba(10, 15, 25, 0.45); }
 .m-head h2 { margin: 0; font-size: 16px; }
 .m-body { padding: 14px 16px; overflow: auto; }
 .m-body .fld { margin-bottom: 10px; }
-.m-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); }
+.m-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); }
 .m-foot .danger { margin-right: auto; }
 .menu { position: fixed; z-index: 100; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; box-shadow: var(--shadow); padding: 4px; min-width: 220px; max-height: 75vh; overflow: auto; }
 .m-it { display: flex; width: 100%; gap: 8px; align-items: center; border: 0; background: none; padding: 6px 10px; border-radius: 6px; text-align: left; cursor: pointer; }
@@ -260,6 +261,9 @@ dialog::backdrop { background: rgba(10, 15, 25, 0.45); }
 /* ---- layout.css */
 #app { height: 100vh; display: flex; flex-direction: column; }
 .top { display: flex; align-items: center; gap: 14px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+.banner { display: flex; align-items: center; gap: 10px; padding: 6px 12px; font-size: 13px; border-bottom: 1px solid var(--warn); background: color-mix(in srgb, var(--warn) 14%, var(--bg)); }
+.banner[hidden] { display: none; }
+.banner-text { font-weight: 600; }
 .brand { font-size: 22px; color: var(--accent); line-height: 1; }
 .plan-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .pm-row1 { display: flex; align-items: center; gap: 6px; }
@@ -823,21 +827,44 @@ const __schedule_calendar = (() => {
 const DAY_MS = 86400000;
 const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
+const MIN_YEAR = 1900;
+const MAX_YEAR = 2200;
+/** Upper bound for a task duration and |lag|, in working days (~38 years). */
+const MAX_DURATION = 10000;
+const MAX_LAG = 10000;
+
+/** Coerce to an integer in [lo, hi]; non-numbers become `dflt`. */
+function clampInt(v, lo, hi, dflt = 0) {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return dflt;
+  return Math.max(lo, Math.min(hi, n));
+}
+
+const clampDuration = (v, dflt = 0) => clampInt(v, 0, MAX_DURATION, dflt);
+const clampLag = (v) => clampInt(v, -MAX_LAG, MAX_LAG, 0);
+
 function isISODate(s) {
   if (typeof s !== 'string') return false;
   const m = ISO_RE.exec(s);
   if (!m) return false;
   const y = +m[1], mo = +m[2], d = +m[3];
-  if (mo < 1 || mo > 12 || d < 1) return false;
+  if (y < MIN_YEAR || y > MAX_YEAR || mo < 1 || mo > 12 || d < 1) return false;
   return d <= daysInMonth(y, mo);
 }
 
+// Date.UTC maps years 0–99 to 1900–1999, so set the full year explicitly.
+function utcMs(y, m0, d) {
+  const dt = new Date(0);
+  dt.setUTCFullYear(y, m0, d);
+  return dt.getTime();
+}
+
 function daysInMonth(y, m) {
-  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return new Date(utcMs(y, m, 0)).getUTCDate();
 }
 
 function fromYMD(y, m, d) {
-  return Math.round(Date.UTC(y, m - 1, d) / DAY_MS);
+  return Math.round(utcMs(y, m - 1, d) / DAY_MS);
 }
 
 function toYMD(day) {
@@ -964,13 +991,13 @@ function mondayOf(day) {
 function applyDateEdit(task, field, value, pinned) {
   let start = parseISO(task.start);
   let finish = parseISO(task.finish);
-  let dur = task.duration | 0;
+  let dur = clampDuration(task.duration);
   const milestone = !!task.milestone;
   const defaults = { start: 'duration', finish: 'start', duration: 'start' };
   if (!pinned || pinned === field) pinned = defaults[field];
   if (field === 'start') start = nextWorkday(parseISO(value));
   else if (field === 'finish') finish = prevWorkday(parseISO(value));
-  else dur = Math.max(0, Math.round(Number(value) || 0));
+  else dur = clampDuration(value);
   if (Number.isNaN(start) || Number.isNaN(finish)) return null;
   const recompute = ['start', 'finish', 'duration'].find((f) => f !== field && f !== pinned);
   if (recompute === 'finish') {
@@ -989,12 +1016,12 @@ function applyDateEdit(task, field, value, pinned) {
   }
   return { start: toISO(start), finish: toISO(finish), duration: dur };
 }
-return { isISODate, daysInMonth, fromYMD, toYMD, parseISO, toISO, today, todayISO, weekday, isWorkday, wdIndex, fromWdIndex, nextWorkday, prevWorkday, addWorkdays, workdaysInclusive, workdayDiff, finishFromDuration, startFromDuration, durationFromDates, addWorkdaysISO, addDaysISO, finishFromDurationISO, durationISO, mondayOf, applyDateEdit };
+return { MIN_YEAR, MAX_YEAR, MAX_DURATION, MAX_LAG, clampInt, clampDuration, clampLag, isISODate, daysInMonth, fromYMD, toYMD, parseISO, toISO, today, todayISO, weekday, isWorkday, wdIndex, fromWdIndex, nextWorkday, prevWorkday, addWorkdays, workdaysInclusive, workdayDiff, finishFromDuration, startFromDuration, durationFromDates, addWorkdaysISO, addDaysISO, finishFromDurationISO, durationISO, mondayOf, applyDateEdit };
 })();
 
 // ---- schedule/links.js
 const __schedule_links = (() => {
-const { addWorkdays, startFromDuration, finishFromDuration } = __schedule_calendar;
+const { clampLag, addWorkdays, startFromDuration, finishFromDuration } = __schedule_calendar;
 // Dependency links: parsing/formatting "4FS+2d" style text and the date maths of
 // the four link types. Lag is in working days (negative = lead).
 
@@ -1021,6 +1048,7 @@ function parseLinkToken(token) {
     const unit = (m[5] || 'd').toLowerCase();
     if (unit.startsWith('w')) lag *= 5;
     if (m[3] === '-') lag = -lag;
+    lag = clampLag(lag);
   }
   return { ref: m[1], type: (m[2] || 'FS').toUpperCase(), lag };
 }
@@ -1499,10 +1527,12 @@ return { statusDay, isOverdue, planStats, variance, matchTasks };
 
 // ---- model/plan.js
 const __model_plan = (() => {
-const { isISODate, parseISO, toISO, todayISO, nextWorkday, finishFromDuration, durationFromDates } = __schedule_calendar;
+const { clampDuration, clampLag, MAX_DURATION, isISODate, parseISO, toISO, todayISO, nextWorkday, finishFromDuration, durationFromDates } = __schedule_calendar;
 const { LINK_TYPES } = __schedule_links;
 const { normalizeLevels } = __model_tree;
+const { sanitizeLinks } = __schedule_engine;
 // Plan data model: defaults, normalisation of untrusted JSON and serialisation.
+
 
 
 
@@ -1564,7 +1594,7 @@ function createTask(plan, fields = {}) {
   const start = fields.start || plan.start || todayISO();
   const s = nextWorkday(parseISO(start));
   const milestone = !!fields.milestone;
-  const duration = milestone ? 0 : fields.duration != null ? Math.max(1, fields.duration | 0) : 1;
+  const duration = milestone ? 0 : fields.duration != null ? Math.max(1, clampDuration(fields.duration)) : 1;
   const stamp = nowStamp();
   return {
     id: fields.id != null ? fields.id : nextId(plan),
@@ -1638,12 +1668,16 @@ function normTask(t, plan) {
   const milestone = !!t.milestone;
   let start = isISODate(t.start) ? t.start : plan.start;
   let finish = isISODate(t.finish) ? t.finish : null;
-  let duration = Number.isFinite(+t.duration) ? Math.max(0, Math.round(+t.duration)) : null;
+  let duration = Number.isFinite(+t.duration) ? clampDuration(t.duration) : null;
   if (milestone) {
     duration = 0;
     finish = start;
   } else if (finish && parseISO(finish) >= parseISO(start)) {
     duration = Math.max(1, durationFromDates(parseISO(start), parseISO(finish)));
+    if (duration > MAX_DURATION) {
+      duration = MAX_DURATION;
+      finish = toISO(finishFromDuration(parseISO(start), duration));
+    }
   } else {
     duration = Math.max(1, duration || 1);
     finish = toISO(finishFromDuration(parseISO(start), duration));
@@ -1651,7 +1685,7 @@ function normTask(t, plan) {
   const preds = Array.isArray(t.preds)
     ? t.preds
         .filter((p) => p && Number.isInteger(+p.id))
-        .map((p) => ({ id: +p.id, type: pick(String(p.type || 'FS').toUpperCase(), LINK_TYPES, 'FS'), lag: Math.round(+p.lag || 0) }))
+        .map((p) => ({ id: +p.id, type: pick(String(p.type || 'FS').toUpperCase(), LINK_TYPES, 'FS'), lag: clampLag(p.lag) }))
     : [];
   const baseline =
     t.baseline && isISODate(t.baseline.start) && isISODate(t.baseline.finish)
@@ -1708,8 +1742,12 @@ function normLog(list, kind) {
     });
 }
 
-/** Validate and fill defaults on a plan from untrusted JSON. Throws on non-plans. */
-function normalizePlan(input) {
+/**
+ * Validate and fill defaults on a plan from untrusted JSON. Throws on non-plans.
+ * Links that would form a cycle (or point at sections) are removed; pass a
+ * `report` object to receive them as `report.droppedLinks`.
+ */
+function normalizePlan(input, report) {
   if (!input || typeof input !== 'object' || !Array.isArray(input.rows)) {
     throw new Error('Not a planboard plan (missing "rows").');
   }
@@ -1762,6 +1800,8 @@ function normalizePlan(input) {
     decisions: normLog(logs.decisions, 'decisions'),
     questions: normLog(logs.questions, 'questions'),
   };
+  const dropped = sanitizeLinks(plan.rows);
+  if (report) report.droppedLinks = dropped;
   return plan;
 }
 
@@ -1769,7 +1809,7 @@ function serializePlan(plan, pretty = true) {
   return JSON.stringify(plan, null, pretty ? 2 : 0);
 }
 
-function parsePlanJSON(text) {
+function parsePlanJSON(text, report) {
   let data;
   try {
     data = JSON.parse(text);
@@ -1777,7 +1817,7 @@ function parsePlanJSON(text) {
     throw new Error('File is not valid JSON.');
   }
   if (data && data.plan && Array.isArray(data.plan.rows)) data = data.plan;
-  return normalizePlan(data);
+  return normalizePlan(data, report);
 }
 
 function clonePlan(plan) {
@@ -1796,6 +1836,69 @@ function clearBaseline(plan) {
 return { SCHEMA_VERSION, STATUSES, PRIORITIES, PLAN_STATUSES, LOG_STATUSES, LOG_FIELDS, LEVELS, PALETTE, DEFAULT_SETTINGS, uid, nowStamp, nextId, createTask, createSection, createPlan, normalizePlan, serializePlan, parsePlanJSON, clonePlan, saveBaseline, clearBaseline };
 })();
 
+// ---- model/history.js
+const __model_history = (() => {
+
+// Undo/redo snapshots. Each step stores the plan's JSON split into a head and one
+// string per row; rows unchanged since the previous snapshot reuse the same string,
+// so a step costs only what changed (a 500-task plan is ~400 KB, an edit ~1 KB).
+
+const MAX_HISTORY_STEPS = 200;
+const MAX_HISTORY_BYTES = 20 * 1024 * 1024;
+
+function createHistory({ maxSteps = MAX_HISTORY_STEPS, maxBytes = MAX_HISTORY_BYTES } = {}) {
+  let cache = new Map();
+
+  /** Snapshot a plan. `bytes` counts only strings not shared with earlier snapshots. */
+  function snap(plan) {
+    const { rows, ...rest } = plan;
+    const head = JSON.stringify(rest);
+    const ids = new Array(rows.length);
+    const out = new Array(rows.length);
+    let chars = head.length;
+    if (cache.size > rows.length * 2 + 64) cache = new Map();
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const j = JSON.stringify(r);
+      const c = cache.get(r.id);
+      ids[i] = r.id;
+      if (c === j) out[i] = c;
+      else {
+        cache.set(r.id, j);
+        out[i] = j;
+        chars += j.length;
+      }
+    }
+    return { head, ids, rows: out, bytes: chars * 2 + rows.length * 8 };
+  }
+
+  function restore(sn) {
+    const plan = JSON.parse(sn.head);
+    plan.rows = sn.rows.map((j) => JSON.parse(j));
+    return plan;
+  }
+
+  function same(a, b) {
+    if (a.head !== b.head || a.rows.length !== b.rows.length) return false;
+    for (let i = 0; i < a.rows.length; i++) if (a.rows[i] !== b.rows[i]) return false;
+    return true;
+  }
+
+  /** Push onto a stack, dropping the oldest steps beyond maxSteps / maxBytes. */
+  function push(stack, sn) {
+    stack.push(sn);
+    let total = 0;
+    for (const x of stack) total += x.bytes;
+    while (stack.length > 1 && (stack.length > maxSteps || total > maxBytes)) total -= stack.shift().bytes;
+  }
+
+  const bytes = (stack) => stack.reduce((n, x) => n + x.bytes, 0);
+
+  return { snap, restore, same, push, bytes };
+}
+return { MAX_HISTORY_STEPS, MAX_HISTORY_BYTES, createHistory };
+})();
+
 // ---- ui/state.js
 const __ui_state = (() => {
 const { computeTree, normalizeLevels, visibleRows } = __model_tree;
@@ -1803,6 +1906,7 @@ const { rollup, autoSchedule, findConflicts, sanitizeLinks } = __schedule_engine
 const { criticalPath } = __schedule_critical;
 const { matchTasks } = __model_stats;
 const { nowStamp, normalizePlan } = __model_plan;
+const { createHistory, MAX_HISTORY_STEPS } = __model_history;
 // Application store: current plan, derived schedule data, UI state and undo/redo.
 
 
@@ -1810,10 +1914,12 @@ const { nowStamp, normalizePlan } = __model_plan;
 
 
 
-const MAX_UNDO = 200;
 
-function createStore({ plan, storage, readOnly = false, embedded = false, presenter = false }) {
+const MAX_UNDO = MAX_HISTORY_STEPS;
+
+function createStore({ plan, storage, readOnly = false, embedded = false, presenter = false, history = {} }) {
   const listeners = new Set();
+  const H = createHistory(history);
   const s = {
     plan,
     storage,
@@ -1847,7 +1953,8 @@ function createStore({ plan, storage, readOnly = false, embedded = false, presen
         try {
           moved = autoSchedule(rows, tree);
         } catch (e) {
-          sanitizeLinks(rows);
+          const n = sanitizeLinks(rows).length;
+          if (n) s.emit('warn', `${n} circular link${n === 1 ? '' : 's'} removed.`);
           tree = computeTree(rows);
           moved = autoSchedule(rows, tree);
         }
@@ -1904,42 +2011,41 @@ function createStore({ plan, storage, readOnly = false, embedded = false, presen
       s.emit('readonly');
       return false;
     }
-    const before = JSON.stringify(s.plan);
-    const rowsBefore = touch ? new Map(s.plan.rows.map((r) => [r.id, JSON.stringify(r)])) : null;
+    const before = H.snap(s.plan);
     let res;
     try {
       res = fn(s.plan);
     } catch (e) {
-      s.plan = JSON.parse(before);
+      s.plan = H.restore(before);
       s.derive(false);
       s.emit('error', e.message || String(e));
       return false;
     }
     if (res === false || typeof res === 'string') {
-      s.plan = JSON.parse(before);
+      s.plan = H.restore(before);
       s.derive(false);
       if (typeof res === 'string') s.emit('error', res);
       s.emit('change');
       return false;
     }
     s.derive(schedule);
-    const after = JSON.stringify(s.plan);
-    if (after === before) {
+    const after = H.snap(s.plan);
+    if (H.same(before, after)) {
       s.emit('change');
       return true;
     }
     const stamp = nowStamp();
     if (touch) {
-      for (const r of s.plan.rows) {
-        if (r.kind === 'section') continue;
+      const rowsBefore = new Map(before.ids.map((id, i) => [id, before.rows[i]]));
+      s.plan.rows.forEach((r, i) => {
+        if (r.kind === 'section') return;
         const b = rowsBefore.get(r.id);
-        if (b != null && b !== JSON.stringify(r)) r.updatedAt = stamp;
-      }
+        if (b != null && b !== after.rows[i]) r.updatedAt = stamp;
+      });
     }
     s.plan.updatedAt = stamp;
     if (undo) {
-      s.undoStack.push(before);
-      if (s.undoStack.length > MAX_UNDO) s.undoStack.shift();
+      H.push(s.undoStack, before);
       s.redoStack.length = 0;
     }
     s.lastLabel = label;
@@ -1950,13 +2056,14 @@ function createStore({ plan, storage, readOnly = false, embedded = false, presen
 
   const restore = (from, to) => {
     if (s.readOnly || !from.length) return false;
-    to.push(JSON.stringify(s.plan));
-    s.plan = normalizePlan(JSON.parse(from.pop()));
+    H.push(to, H.snap(s.plan));
+    s.plan = normalizePlan(H.restore(from.pop()));
     s.derive(false);
     s.persist();
     s.emit('change');
     return true;
   };
+  s.historyBytes = () => H.bytes(s.undoStack) + H.bytes(s.redoStack);
   s.undo = () => restore(s.undoStack, s.redoStack);
   s.redo = () => restore(s.redoStack, s.undoStack);
 
@@ -2211,7 +2318,7 @@ const { parseLinkList, formatLink, LINK_TYPES } = __schedule_links;
 const { linkError } = __schedule_engine;
 const { computeTree, leavesOf, insertionPoint, isTask, blockRange } = __model_tree;
 const { createTask, createSection, STATUSES, PRIORITIES } = __model_plan;
-const { parseISO, toISO, isISODate, nextWorkday, wdIndex, fromWdIndex, applyDateEdit, finishFromDuration, durationFromDates } = __schedule_calendar;
+const { clampDuration, clampLag, parseISO, toISO, isISODate, nextWorkday, wdIndex, fromWdIndex, applyDateEdit, finishFromDuration, durationFromDates } = __schedule_calendar;
 // Pure editing helpers used by the UI: field edits with status/progress sync,
 // predecessor text, links, moving bars and inserting rows.
 
@@ -2247,7 +2354,7 @@ function setTaskField(task, field, value, pinned) {
     case 'duration': {
       if (field !== 'duration' && !isISODate(value)) return 'Enter a date as YYYY-MM-DD.';
       if (field === 'duration' && !/^\s*\d+\s*d?\s*$/i.test(String(value))) return 'Duration is a whole number of working days.';
-      const v = field === 'duration' ? parseInt(value, 10) : value;
+      const v = field === 'duration' ? clampDuration(parseInt(value, 10)) : value;
       if (field === 'duration' && v === 0) task.milestone = true;
       else if (field === 'duration' && task.milestone) task.milestone = false;
       const r = applyDateEdit(task, field, v, pinned);
@@ -2350,7 +2457,7 @@ function addLink(rows, predId, succId, type = 'FS', lag = 0) {
     if (saved) succ.preds.splice(existing, 0, saved);
     return err;
   }
-  const link = { id: predId, type, lag: Math.round(+lag || 0) };
+  const link = { id: predId, type, lag: clampLag(lag) };
   if (existing >= 0) succ.preds.splice(existing, 0, link);
   else succ.preds.push(link);
   return null;
@@ -2510,7 +2617,24 @@ function extractPayload(html) {
     return null;
   }
 }
-return { embedPayload, extractPayload };
+
+const stampMs = (s) => Date.parse(s) || 0;
+
+/**
+ * Decide what an HTML file with an embedded payload opens. `saved` is this
+ * browser's stored plan with the same id (or null). Edits saved here that are
+ * newer than the file win, opened editable; otherwise the file's plan opens with
+ * the payload's flags (read-only + presenter unless they are explicitly false).
+ */
+function resolveBoot(payload, saved) {
+  if (!payload || !payload.plan) return null;
+  const file = { plan: payload.plan, readOnly: payload.readOnly !== false, presenter: payload.presenter !== false };
+  if (saved && saved.id === file.plan.id && stampMs(saved.updatedAt) > stampMs(file.plan.updatedAt)) {
+    return { source: 'saved', plan: saved, readOnly: false, presenter: false, file };
+  }
+  return { source: 'file', plan: file.plan, readOnly: file.readOnly, presenter: file.presenter, file };
+}
+return { embedPayload, extractPayload, resolveBoot };
 })();
 
 // ---- ui/gantt/scale.js
@@ -3978,7 +4102,10 @@ function inline(escaped) {
 
 /** Render the markdown subset to safe HTML. */
 function renderMarkdown(src) {
-  const lines = String(src == null ? '' : src).replace(/\r\n?/g, '\n').split('\n');
+  // Control characters are dropped up front: they are never meaningful in a
+  // description and \u0000 / \u0001 are used as placeholders below.
+  const text = String(src == null ? '' : src).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
   const out = [];
   let para = [];
   let list = null;
@@ -4616,7 +4743,7 @@ return { closeMenu, isMenuOpen, openMenu, openPalette };
 
 // ---- io/paste.js
 const __io_paste = (() => {
-const { fromYMD, toISO, parseISO, nextWorkday, prevWorkday, startFromDuration, durationFromDates, daysInMonth } = __schedule_calendar;
+const { MIN_YEAR, MAX_YEAR, fromYMD, toISO, parseISO, nextWorkday, prevWorkday, startFromDuration, durationFromDates, daysInMonth } = __schedule_calendar;
 const { parseLinkToken } = __schedule_links;
 const { computeTree, normalizeLevels } = __model_tree;
 const { createTask, createSection, STATUSES, PALETTE } = __model_plan;
@@ -4743,6 +4870,7 @@ const DATE_RE = /^(\d{1,4})[/.-](\d{1,2})[/.-](\d{1,4})(?:[ T].*)?$/;
 
 function ymd(y, m, d) {
   if (y < 100) y += 2000;
+  if (y < MIN_YEAR || y > MAX_YEAR) return null;
   if (m < 1 || m > 12 || d < 1 || d > daysInMonth(y, m)) return null;
   return toISO(fromYMD(y, m, d));
 }
@@ -4965,6 +5093,8 @@ const ORDER_TEXT = {
   none: '',
 };
 
+const droppedNote = (n) => (n ? ` ${n} circular or invalid link${n === 1 ? ' was' : 's were'} removed.` : '');
+
 async function openPasteImport(app, initialText = '') {
   const store = app.store;
   const st = { table: [], headers: [], mapping: {}, sig: '', userOrder: false, result: null };
@@ -5096,20 +5226,21 @@ async function openPasteImport(app, initialText = '') {
     const plan = createPlan({ name: 'Imported plan' });
     const res = importTable(plan, table, o);
     plan.rows = res.rows;
-    sanitizeLinks(plan.rows);
+    const dropped = sanitizeLinks(plan.rows).length;
     const starts = plan.rows.filter((x) => x.kind !== 'section').map((x) => x.start).sort();
     if (starts.length) plan.start = starts[0];
     app.addPlan(plan);
-    app.toast(`Imported ${starts.length} tasks into a new plan.`);
+    app.toast(`Imported ${starts.length} tasks into a new plan.${droppedNote(dropped)}`, dropped ? 'warn' : 'info');
   } else {
     let n = 0;
+    let dropped = 0;
     store.commit('Paste import', (plan) => {
       const res = importTable(plan, table, o);
       plan.rows.push(...res.rows);
       n = res.rows.filter((x) => x.kind !== 'section').length;
-      sanitizeLinks(plan.rows);
+      dropped = sanitizeLinks(plan.rows).length;
     });
-    app.toast(`Imported ${n} tasks.`);
+    app.toast(`Imported ${n} tasks.${droppedNote(dropped)}`, dropped ? 'warn' : 'info');
   }
 }
 return { openPasteImport };
@@ -5268,10 +5399,9 @@ const { indent, outdent, deleteRows: removeRows, moveRows, isTask, descendants, 
 const { insertTaskBelow, insertSectionBelow } = __model_edit;
 const { planStats } = __model_stats;
 const { today, isISODate, mondayOf, toISO } = __schedule_calendar;
-const { sanitizeLinks } = __schedule_engine;
 const { formatLag } = __schedule_links;
 const { toCSV } = __io_csv;
-const { embedPayload, extractPayload } = __io_standalone;
+const { embedPayload, extractPayload, resolveBoot } = __io_standalone;
 const { escapeHtml: esc } = __util_escape;
 const { GANTT_CSS } = __ui_gantt_render;
 const { createGrid } = __ui_grid_grid;
@@ -5288,7 +5418,6 @@ const { columnState } = __ui_grid_columns;
 const { fmtDateLong, fmtStamp } = __ui_format;
 // App shell: layout, header, toolbar, menus, plan management, import/export,
 // global shortcuts. Views (grid, gantt, card, board, logs) live in their own modules.
-
 
 
 
@@ -5343,6 +5472,7 @@ function layoutHTML() {
   <button type="button" class="btn ic" data-act="help" aria-label="Keyboard shortcuts and help" title="Help (?)">?</button>
 </div>
 </header>
+<div class="banner" role="status" hidden><span class="banner-text"></span><button type="button" class="btn sm" data-act="use-file">Use file version</button><button type="button" class="btn ic sm" data-act="banner-close" aria-label="Dismiss" title="Dismiss">×</button></div>
 <div class="toolbar" role="toolbar" aria-label="Plan tools">
   <div class="tb-group edit-only">
     <button type="button" class="btn" data-act="add-task" title="New task below (Insert or ${K}+Enter)">+ Task</button>
@@ -5417,23 +5547,22 @@ function boot(sourceHtml) {
   let theme = storage.prefs().theme || 'auto';
   applyTheme(theme);
 
-  let plan = null;
-  let readOnly = false;
-  let presenter = false;
-  let embedded = false;
+  // A file with an embedded plan opens that plan, unless this browser holds newer
+  // saved edits of the same plan (see resolveBoot).
+  let opened = null;
+  const fileReport = {};
   try {
     const payload = JSON.parse(document.getElementById('pb-data').textContent || 'null');
     if (payload && payload.plan) {
-      plan = normalizePlan(payload.plan);
-      embedded = true;
-      readOnly = payload.readOnly !== false;
-      presenter = payload.presenter !== false;
+      const filePlan = normalizePlan(payload.plan, fileReport);
+      opened = resolveBoot({ ...payload, plan: filePlan }, storage.load(filePlan.id));
     }
   } catch (e) {
-    plan = null;
+    opened = null;
   }
-  if (!plan) plan = loadInitial(storage);
-  const store = createStore({ plan, storage, readOnly, embedded, presenter });
+  const store = opened
+    ? createStore({ plan: opened.plan, storage, readOnly: opened.readOnly, embedded: true, presenter: opened.presenter })
+    : createStore({ plan: loadInitial(storage), storage });
 
   const root = document.getElementById('app');
   root.innerHTML = layoutHTML();
@@ -5808,16 +5937,16 @@ function boot(sourceHtml) {
     const lower = name.toLowerCase();
     if (/\.(csv|tsv|txt)$/.test(lower)) return openPasteImport(app, text);
     let p;
+    const report = {};
     try {
       if (/\.html?$/.test(lower) || /^\s*</.test(text)) {
         const payload = extractPayload(text);
         if (!payload || !payload.plan) throw new Error('this HTML file has no embedded plan');
-        p = normalizePlan(payload.plan);
-      } else p = parsePlanJSON(text);
+        p = normalizePlan(payload.plan, report);
+      } else p = parsePlanJSON(text, report);
     } catch (e) {
       return toast(`Import failed: ${e.message}`, 'error', 7000);
     }
-    sanitizeLinks(p.rows);
     const existing = storage.load(p.id);
     if (existing) {
       const r = await modal({
@@ -5832,12 +5961,51 @@ function boot(sourceHtml) {
       }
     }
     addPlan(p);
-    toast(`Imported “${p.name}”.`);
+    toast(`Imported “${p.name}”.${droppedNote(report)}`, report.droppedLinks.length ? 'warn' : 'info', 6000);
     return undefined;
   }
 
   const exportJSON = () => download(safeFilename(store.plan.name, 'json'), serializePlan(store.plan), 'application/json');
   const exportCSV = () => download(safeFilename(store.plan.name, 'csv'), toCSV(store.plan, store.d.tree), 'text/csv;charset=utf-8');
+  function droppedNote(report) {
+    const n = (report.droppedLinks || []).length;
+    return n ? ` ${n} circular or invalid link${n === 1 ? ' was' : 's were'} removed.` : '';
+  }
+
+  // "Save to file": this HTML with the current plan embedded as an editable copy,
+  // so the plan travels inside the file itself.
+  function saveToFile() {
+    if (store.readOnly) return store.emit('readonly');
+    store.flush();
+    const payload = { app: 'planboard', readOnly: false, presenter: false, savedAt: new Date().toISOString(), plan: JSON.parse(serializePlan(store.plan, false)) };
+    const name = safeFilename(store.plan.name, 'html');
+    download(name, embedPayload(sourceHtml, payload), 'text/html;charset=utf-8');
+    toast(`Saved “${name}”. Opening that file restores this plan, ready to edit.`, 'info', 6000);
+    return undefined;
+  }
+
+  function showBanner(text) {
+    q('.banner-text').textContent = text;
+    q('.banner').hidden = false;
+  }
+  const hideBanner = () => {
+    q('.banner').hidden = true;
+  };
+
+  async function useFileVersion() {
+    const f = opened && opened.file;
+    if (!f) return;
+    if (!f.readOnly && !(await confirmBox('Open the version stored in this file? Your newer edits saved in this browser will be replaced by it.', { ok: 'Use file version', danger: true }))) return;
+    hideBanner();
+    store.flush();
+    store.readOnly = f.readOnly;
+    store.presenter = f.presenter;
+    const p = clonePlan(f.plan);
+    if (f.readOnly) store.load(p, { save: false });
+    else addPlan(p);
+    toast(f.readOnly ? 'Showing the file version (read-only). Your saved edits are still in this browser.' : 'Showing the file version.', 'info', 5000);
+  }
+
   function exportStandalone() {
     const payload = { app: 'planboard', readOnly: true, presenter: true, exportedAt: new Date().toISOString(), plan: JSON.parse(serializePlan(store.plan, false)) };
     download(safeFilename(store.plan.name, 'html'), embedPayload(sourceHtml, payload), 'text/html;charset=utf-8');
@@ -5874,8 +6042,9 @@ function boot(sourceHtml) {
         { sep: true }
       );
     }
+    items.push({ heading: 'Export' });
+    if (!ro) items.push({ label: 'Save to file (.html)', hint: `${K}+S`, action: saveToFile });
     items.push(
-      { heading: 'Export' },
       { label: 'Export JSON', action: exportJSON },
       { label: 'Export CSV', action: exportCSV },
       { label: 'Export standalone copy (.html)', hint: 'email it', action: exportStandalone },
@@ -5893,12 +6062,19 @@ function boot(sourceHtml) {
     let p = clonePlan(store.plan);
     const existing = storage.load(p.id);
     if (existing) {
+      const newer = (Date.parse(existing.updatedAt) || 0) > (Date.parse(p.updatedAt) || 0);
+      const saved = `“${esc(existing.name)}” (saved ${esc(fmtStamp(existing.updatedAt))})`;
       const r = await modal({
         title: 'Unlock editing',
-        body: `<p>This browser already has “${esc(existing.name)}” (saved ${esc(fmtStamp(existing.updatedAt))}).</p><p>Keep both, or replace the saved plan with this copy?</p>`,
-        actions: [{ label: 'Cancel', value: 'cancel' }, { label: 'Replace saved plan', value: 'replace' }, { label: 'Keep both', value: 'copy', primary: true }],
+        body: newer
+          ? `<p>This browser has newer edits of ${saved} than this file.</p><p>Open your edits, keep both, or replace your edits with the file version? Replacing loses your edits.</p>`
+          : `<p>This browser already has ${saved}.</p><p>Keep both, or replace the saved plan with this copy?</p>`,
+        actions: newer
+          ? [{ label: 'Cancel', value: 'cancel' }, { label: 'Replace my edits', value: 'replace', danger: true }, { label: 'Keep both', value: 'copy' }, { label: 'Open my edits', value: 'saved', primary: true }]
+          : [{ label: 'Cancel', value: 'cancel' }, { label: 'Replace saved plan', value: 'replace' }, { label: 'Keep both', value: 'copy', primary: true }],
       });
       if (r.value === 'cancel') return;
+      if (r.value === 'saved') p = existing;
       if (r.value === 'copy') {
         p.id = uid();
         p.name = `${p.name} (copy)`.slice(0, 200);
@@ -5906,6 +6082,7 @@ function boot(sourceHtml) {
     }
     store.readOnly = false;
     store.presenter = false;
+    hideBanner();
     addPlan(p);
     toast(persistent ? 'Editing unlocked. Changes are saved in this browser.' : 'Editing unlocked, but browser storage is unavailable: use Export JSON to keep changes.', persistent ? 'info' : 'error', 6000);
   }
@@ -6031,6 +6208,7 @@ function boot(sourceHtml) {
       ['Alt+← / Alt+→ or Space', 'Collapse / expand a summary task or section'],
       [`${K}+Z / Shift+${K}+Z`, 'Undo / redo (also Ctrl+Y)'],
       [`${K}+F`, 'Search'],
+      [`${K}+S`, 'Save to file: download this HTML with the current plan embedded (opens editable)'],
       ['Gantt', 'Drag a bar to move it, drag its right edge to change the finish. Drag the small circle at a bar’s start or finish onto another bar to link them (drop on the left half → successor start, right half → successor finish). Click an arrow to edit or delete it; double-click a bar to open the card.'],
       ['Predecessors', 'Type outline numbers or #IDs with optional type and lag: 3, 1.2FS+2d, #7SS-1d, 4FF+1d, 5SF'],
       ['Board', 'Drag cards between columns; Shift+←/→ moves the focused card'],
@@ -6039,13 +6217,15 @@ function boot(sourceHtml) {
     modal({
       title: 'Keyboard shortcuts & tips',
       wide: true,
-      body: `<table class="kbd-table">${rows.map(([k, v]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(v)}</td></tr>`).join('')}</table><p class="hint">Everything is stored in this browser (localStorage) per plan. Use File → Export JSON for backups, or Export standalone copy to share a read-only version.</p>`,
+      body: `<table class="kbd-table">${rows.map(([k, v]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(v)}</td></tr>`).join('')}</table><p class="hint">Everything is stored in this browser (localStorage) per plan. Use File → Save to file to keep the plan inside an .html file, Export JSON for backups, or Export standalone copy to share a read-only version.</p>`,
       actions: [{ label: 'Close', value: 'cancel', primary: true }],
     });
   }
 
   // ---- header & toolbar wiring ---------------------------------------------
   const ACTS = {
+    'use-file': useFileVersion,
+    'banner-close': hideBanner,
     'add-task': addTask,
     'add-section': () => addSection(),
     indent: app.indent,
@@ -6078,7 +6258,7 @@ function boot(sourceHtml) {
     unlock,
     help: showHelp,
   };
-  for (const scope of [q('.top'), q('.toolbar')]) {
+  for (const scope of [q('.top'), q('.banner'), q('.toolbar')]) {
     scope.addEventListener('click', (e) => {
       const b = e.target.closest('[data-act]');
       if (b && scope.contains(b) && ACTS[b.dataset.act]) ACTS[b.dataset.act](b, e);
@@ -6251,6 +6431,7 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
       render();
       if (data && data.moved && data.moved.size) toast(`Auto-schedule moved ${data.moved.size} task${data.moved.size === 1 ? '' : 's'}.`, 'info', 2500);
     } else if (kind === 'error') toast(data, 'error', 6000);
+    else if (kind === 'warn') toast(data, 'warn', 6000);
     else if (kind === 'readonly') toast('This is a read-only copy. Click “Unlock editing” to make changes.');
     else if (kind === 'saved') updateSaveState();
   });
@@ -6267,6 +6448,10 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
     } else if (mod(e) && !e.altKey && k === 'y' && !isTyping(e)) {
       e.preventDefault();
       store.redo();
+    } else if (mod(e) && !e.altKey && k === 's') {
+      e.preventDefault();
+      if (isTyping(e)) e.target.blur();
+      setTimeout(saveToFile);
     } else if (mod(e) && !e.altKey && k === 'f') {
       e.preventDefault();
       search.focus();
@@ -6313,6 +6498,8 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
   });
 
   render();
+  if (opened && opened.source === 'saved') showBanner('Showing your saved edits (newer than this file).');
+  else if (opened && fileReport.droppedLinks.length) toast(droppedNote(fileReport).trim(), 'warn', 6000);
   if (!store.persistent && !persistent && !store.readOnly) toast('Browser storage is unavailable (private mode?): changes will not be saved. Use Export JSON.', 'error', 8000);
   if (store.readOnly) toast('Read-only shared copy. Click “Unlock editing” to make changes.', 'info', 5000);
   else app.grid.focus();
