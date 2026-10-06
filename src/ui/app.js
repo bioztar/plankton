@@ -9,10 +9,9 @@ import { indent, outdent, deleteRows as removeRows, moveRows, isTask, descendant
 import { insertTaskBelow, insertSectionBelow } from '../model/edit.js';
 import { planStats } from '../model/stats.js';
 import { today, isISODate, mondayOf, toISO } from '../schedule/calendar.js';
-import { sanitizeLinks } from '../schedule/engine.js';
 import { formatLag } from '../schedule/links.js';
 import { toCSV } from '../io/csv.js';
-import { embedPayload, extractPayload } from '../io/standalone.js';
+import { embedPayload, extractPayload, resolveBoot } from '../io/standalone.js';
 import { escapeHtml as esc } from '../util/escape.js';
 import { GANTT_CSS } from './gantt/render.js';
 import { createGrid } from './grid/grid.js';
@@ -55,6 +54,7 @@ function layoutHTML() {
   <button type="button" class="btn ic" data-act="help" aria-label="Keyboard shortcuts and help" title="Help (?)">?</button>
 </div>
 </header>
+<div class="banner" role="status" hidden><span class="banner-text"></span><button type="button" class="btn sm" data-act="use-file">Use file version</button><button type="button" class="btn ic sm" data-act="banner-close" aria-label="Dismiss" title="Dismiss">×</button></div>
 <div class="toolbar" role="toolbar" aria-label="Plan tools">
   <div class="tb-group edit-only">
     <button type="button" class="btn" data-act="add-task" title="New task below (Insert or ${K}+Enter)">+ Task</button>
@@ -129,23 +129,22 @@ export function boot(sourceHtml) {
   let theme = storage.prefs().theme || 'auto';
   applyTheme(theme);
 
-  let plan = null;
-  let readOnly = false;
-  let presenter = false;
-  let embedded = false;
+  // A file with an embedded plan opens that plan, unless this browser holds newer
+  // saved edits of the same plan (see resolveBoot).
+  let opened = null;
+  const fileReport = {};
   try {
     const payload = JSON.parse(document.getElementById('pb-data').textContent || 'null');
     if (payload && payload.plan) {
-      plan = normalizePlan(payload.plan);
-      embedded = true;
-      readOnly = payload.readOnly !== false;
-      presenter = payload.presenter !== false;
+      const filePlan = normalizePlan(payload.plan, fileReport);
+      opened = resolveBoot({ ...payload, plan: filePlan }, storage.load(filePlan.id));
     }
   } catch (e) {
-    plan = null;
+    opened = null;
   }
-  if (!plan) plan = loadInitial(storage);
-  const store = createStore({ plan, storage, readOnly, embedded, presenter });
+  const store = opened
+    ? createStore({ plan: opened.plan, storage, readOnly: opened.readOnly, embedded: true, presenter: opened.presenter })
+    : createStore({ plan: loadInitial(storage), storage });
 
   const root = document.getElementById('app');
   root.innerHTML = layoutHTML();
@@ -520,16 +519,16 @@ export function boot(sourceHtml) {
     const lower = name.toLowerCase();
     if (/\.(csv|tsv|txt)$/.test(lower)) return openPasteImport(app, text);
     let p;
+    const report = {};
     try {
       if (/\.html?$/.test(lower) || /^\s*</.test(text)) {
         const payload = extractPayload(text);
         if (!payload || !payload.plan) throw new Error('this HTML file has no embedded plan');
-        p = normalizePlan(payload.plan);
-      } else p = parsePlanJSON(text);
+        p = normalizePlan(payload.plan, report);
+      } else p = parsePlanJSON(text, report);
     } catch (e) {
       return toast(`Import failed: ${e.message}`, 'error', 7000);
     }
-    sanitizeLinks(p.rows);
     const existing = storage.load(p.id);
     if (existing) {
       const r = await modal({
@@ -544,12 +543,51 @@ export function boot(sourceHtml) {
       }
     }
     addPlan(p);
-    toast(`Imported “${p.name}”.`);
+    toast(`Imported “${p.name}”.${droppedNote(report)}`, report.droppedLinks.length ? 'warn' : 'info', 6000);
     return undefined;
   }
 
   const exportJSON = () => download(safeFilename(store.plan.name, 'json'), serializePlan(store.plan), 'application/json');
   const exportCSV = () => download(safeFilename(store.plan.name, 'csv'), toCSV(store.plan, store.d.tree), 'text/csv;charset=utf-8');
+  function droppedNote(report) {
+    const n = (report.droppedLinks || []).length;
+    return n ? ` ${n} circular or invalid link${n === 1 ? ' was' : 's were'} removed.` : '';
+  }
+
+  // "Save to file": this HTML with the current plan embedded as an editable copy,
+  // so the plan travels inside the file itself.
+  function saveToFile() {
+    if (store.readOnly) return store.emit('readonly');
+    store.flush();
+    const payload = { app: 'planboard', readOnly: false, presenter: false, savedAt: new Date().toISOString(), plan: JSON.parse(serializePlan(store.plan, false)) };
+    const name = safeFilename(store.plan.name, 'html');
+    download(name, embedPayload(sourceHtml, payload), 'text/html;charset=utf-8');
+    toast(`Saved “${name}”. Opening that file restores this plan, ready to edit.`, 'info', 6000);
+    return undefined;
+  }
+
+  function showBanner(text) {
+    q('.banner-text').textContent = text;
+    q('.banner').hidden = false;
+  }
+  const hideBanner = () => {
+    q('.banner').hidden = true;
+  };
+
+  async function useFileVersion() {
+    const f = opened && opened.file;
+    if (!f) return;
+    if (!f.readOnly && !(await confirmBox('Open the version stored in this file? Your newer edits saved in this browser will be replaced by it.', { ok: 'Use file version', danger: true }))) return;
+    hideBanner();
+    store.flush();
+    store.readOnly = f.readOnly;
+    store.presenter = f.presenter;
+    const p = clonePlan(f.plan);
+    if (f.readOnly) store.load(p, { save: false });
+    else addPlan(p);
+    toast(f.readOnly ? 'Showing the file version (read-only). Your saved edits are still in this browser.' : 'Showing the file version.', 'info', 5000);
+  }
+
   function exportStandalone() {
     const payload = { app: 'planboard', readOnly: true, presenter: true, exportedAt: new Date().toISOString(), plan: JSON.parse(serializePlan(store.plan, false)) };
     download(safeFilename(store.plan.name, 'html'), embedPayload(sourceHtml, payload), 'text/html;charset=utf-8');
@@ -586,8 +624,9 @@ export function boot(sourceHtml) {
         { sep: true }
       );
     }
+    items.push({ heading: 'Export' });
+    if (!ro) items.push({ label: 'Save to file (.html)', hint: `${K}+S`, action: saveToFile });
     items.push(
-      { heading: 'Export' },
       { label: 'Export JSON', action: exportJSON },
       { label: 'Export CSV', action: exportCSV },
       { label: 'Export standalone copy (.html)', hint: 'email it', action: exportStandalone },
@@ -605,12 +644,19 @@ export function boot(sourceHtml) {
     let p = clonePlan(store.plan);
     const existing = storage.load(p.id);
     if (existing) {
+      const newer = (Date.parse(existing.updatedAt) || 0) > (Date.parse(p.updatedAt) || 0);
+      const saved = `“${esc(existing.name)}” (saved ${esc(fmtStamp(existing.updatedAt))})`;
       const r = await modal({
         title: 'Unlock editing',
-        body: `<p>This browser already has “${esc(existing.name)}” (saved ${esc(fmtStamp(existing.updatedAt))}).</p><p>Keep both, or replace the saved plan with this copy?</p>`,
-        actions: [{ label: 'Cancel', value: 'cancel' }, { label: 'Replace saved plan', value: 'replace' }, { label: 'Keep both', value: 'copy', primary: true }],
+        body: newer
+          ? `<p>This browser has newer edits of ${saved} than this file.</p><p>Open your edits, keep both, or replace your edits with the file version? Replacing loses your edits.</p>`
+          : `<p>This browser already has ${saved}.</p><p>Keep both, or replace the saved plan with this copy?</p>`,
+        actions: newer
+          ? [{ label: 'Cancel', value: 'cancel' }, { label: 'Replace my edits', value: 'replace', danger: true }, { label: 'Keep both', value: 'copy' }, { label: 'Open my edits', value: 'saved', primary: true }]
+          : [{ label: 'Cancel', value: 'cancel' }, { label: 'Replace saved plan', value: 'replace' }, { label: 'Keep both', value: 'copy', primary: true }],
       });
       if (r.value === 'cancel') return;
+      if (r.value === 'saved') p = existing;
       if (r.value === 'copy') {
         p.id = uid();
         p.name = `${p.name} (copy)`.slice(0, 200);
@@ -618,6 +664,7 @@ export function boot(sourceHtml) {
     }
     store.readOnly = false;
     store.presenter = false;
+    hideBanner();
     addPlan(p);
     toast(persistent ? 'Editing unlocked. Changes are saved in this browser.' : 'Editing unlocked, but browser storage is unavailable: use Export JSON to keep changes.', persistent ? 'info' : 'error', 6000);
   }
@@ -743,6 +790,7 @@ export function boot(sourceHtml) {
       ['Alt+← / Alt+→ or Space', 'Collapse / expand a summary task or section'],
       [`${K}+Z / Shift+${K}+Z`, 'Undo / redo (also Ctrl+Y)'],
       [`${K}+F`, 'Search'],
+      [`${K}+S`, 'Save to file: download this HTML with the current plan embedded (opens editable)'],
       ['Gantt', 'Drag a bar to move it, drag its right edge to change the finish. Drag the small circle at a bar’s start or finish onto another bar to link them (drop on the left half → successor start, right half → successor finish). Click an arrow to edit or delete it; double-click a bar to open the card.'],
       ['Predecessors', 'Type outline numbers or #IDs with optional type and lag: 3, 1.2FS+2d, #7SS-1d, 4FF+1d, 5SF'],
       ['Board', 'Drag cards between columns; Shift+←/→ moves the focused card'],
@@ -751,13 +799,15 @@ export function boot(sourceHtml) {
     modal({
       title: 'Keyboard shortcuts & tips',
       wide: true,
-      body: `<table class="kbd-table">${rows.map(([k, v]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(v)}</td></tr>`).join('')}</table><p class="hint">Everything is stored in this browser (localStorage) per plan. Use File → Export JSON for backups, or Export standalone copy to share a read-only version.</p>`,
+      body: `<table class="kbd-table">${rows.map(([k, v]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(v)}</td></tr>`).join('')}</table><p class="hint">Everything is stored in this browser (localStorage) per plan. Use File → Save to file to keep the plan inside an .html file, Export JSON for backups, or Export standalone copy to share a read-only version.</p>`,
       actions: [{ label: 'Close', value: 'cancel', primary: true }],
     });
   }
 
   // ---- header & toolbar wiring ---------------------------------------------
   const ACTS = {
+    'use-file': useFileVersion,
+    'banner-close': hideBanner,
     'add-task': addTask,
     'add-section': () => addSection(),
     indent: app.indent,
@@ -790,7 +840,7 @@ export function boot(sourceHtml) {
     unlock,
     help: showHelp,
   };
-  for (const scope of [q('.top'), q('.toolbar')]) {
+  for (const scope of [q('.top'), q('.banner'), q('.toolbar')]) {
     scope.addEventListener('click', (e) => {
       const b = e.target.closest('[data-act]');
       if (b && scope.contains(b) && ACTS[b.dataset.act]) ACTS[b.dataset.act](b, e);
@@ -963,6 +1013,7 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
       render();
       if (data && data.moved && data.moved.size) toast(`Auto-schedule moved ${data.moved.size} task${data.moved.size === 1 ? '' : 's'}.`, 'info', 2500);
     } else if (kind === 'error') toast(data, 'error', 6000);
+    else if (kind === 'warn') toast(data, 'warn', 6000);
     else if (kind === 'readonly') toast('This is a read-only copy. Click “Unlock editing” to make changes.');
     else if (kind === 'saved') updateSaveState();
   });
@@ -979,6 +1030,10 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
     } else if (mod(e) && !e.altKey && k === 'y' && !isTyping(e)) {
       e.preventDefault();
       store.redo();
+    } else if (mod(e) && !e.altKey && k === 's') {
+      e.preventDefault();
+      if (isTyping(e)) e.target.blur();
+      setTimeout(saveToFile);
     } else if (mod(e) && !e.altKey && k === 'f') {
       e.preventDefault();
       search.focus();
@@ -1025,6 +1080,8 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
   });
 
   render();
+  if (opened && opened.source === 'saved') showBanner('Showing your saved edits (newer than this file).');
+  else if (opened && fileReport.droppedLinks.length) toast(droppedNote(fileReport).trim(), 'warn', 6000);
   if (!store.persistent && !persistent && !store.readOnly) toast('Browser storage is unavailable (private mode?): changes will not be saved. Use Export JSON.', 'error', 8000);
   if (store.readOnly) toast('Read-only shared copy. Click “Unlock editing” to make changes.', 'info', 5000);
   else app.grid.focus();

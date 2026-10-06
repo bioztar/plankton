@@ -12,9 +12,9 @@ Single-file HTML project planner: nested tasks, sections, task cards, Gantt with
 - **Gantt:** day / week / month / quarter zoom, fit project, today line, weekend shading. Bars can be dragged and resized, and dependencies of all four types take lag or lead (`4FS+2d`, `7SS-1d`).
 - **Scheduling:** auto-schedule or conflict highlighting, cycle refusal, critical path, baseline with variance.
 - **Views:** Board (kanban by status) and Logs (risks, decisions, open questions).
-- **Data:** autosave per plan in `localStorage`, multiple plans, JSON import/export (picker or drag and drop), paste import from Excel / Planner / Smartsheet, CSV export, and a standalone copy that opens read-only in presenter mode.
+- **Data:** autosave per plan in `localStorage`, multiple plans, JSON import/export (picker or drag and drop), paste import from Excel / Planner / Smartsheet, CSV export, **Save to file** (Ctrl/Cmd+S: downloads this HTML with the current plan embedded, opening editable; newer edits saved in the browser win on reopen, with a banner to switch back to the file version), and a standalone copy that opens read-only in presenter mode.
 - **Presenting and output:** presenter mode, landscape print layout, Gantt PNG export.
-- **Quality of life:** undo / redo with 200 steps, search and filters, column show/hide and resize, light and dark themes. Press `?` in the app to see the keyboard shortcuts.
+- **Quality of life:** undo / redo with up to 200 steps (history capped at ~20 MB, unchanged rows shared between steps), search and filters, column show/hide and resize, light and dark themes. Press `?` in the app to see the keyboard shortcuts.
 
 ## Development
 
