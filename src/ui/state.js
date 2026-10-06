@@ -4,11 +4,13 @@ import { rollup, autoSchedule, findConflicts, sanitizeLinks } from '../schedule/
 import { criticalPath } from '../schedule/critical.js';
 import { matchTasks } from '../model/stats.js';
 import { nowStamp, normalizePlan } from '../model/plan.js';
+import { createHistory, MAX_HISTORY_STEPS } from '../model/history.js';
 
-export const MAX_UNDO = 200;
+export const MAX_UNDO = MAX_HISTORY_STEPS;
 
-export function createStore({ plan, storage, readOnly = false, embedded = false, presenter = false }) {
+export function createStore({ plan, storage, readOnly = false, embedded = false, presenter = false, history = {} }) {
   const listeners = new Set();
+  const H = createHistory(history);
   const s = {
     plan,
     storage,
@@ -42,7 +44,8 @@ export function createStore({ plan, storage, readOnly = false, embedded = false,
         try {
           moved = autoSchedule(rows, tree);
         } catch (e) {
-          sanitizeLinks(rows);
+          const n = sanitizeLinks(rows).length;
+          if (n) s.emit('warn', `${n} circular link${n === 1 ? '' : 's'} removed.`);
           tree = computeTree(rows);
           moved = autoSchedule(rows, tree);
         }
@@ -99,42 +102,41 @@ export function createStore({ plan, storage, readOnly = false, embedded = false,
       s.emit('readonly');
       return false;
     }
-    const before = JSON.stringify(s.plan);
-    const rowsBefore = touch ? new Map(s.plan.rows.map((r) => [r.id, JSON.stringify(r)])) : null;
+    const before = H.snap(s.plan);
     let res;
     try {
       res = fn(s.plan);
     } catch (e) {
-      s.plan = JSON.parse(before);
+      s.plan = H.restore(before);
       s.derive(false);
       s.emit('error', e.message || String(e));
       return false;
     }
     if (res === false || typeof res === 'string') {
-      s.plan = JSON.parse(before);
+      s.plan = H.restore(before);
       s.derive(false);
       if (typeof res === 'string') s.emit('error', res);
       s.emit('change');
       return false;
     }
     s.derive(schedule);
-    const after = JSON.stringify(s.plan);
-    if (after === before) {
+    const after = H.snap(s.plan);
+    if (H.same(before, after)) {
       s.emit('change');
       return true;
     }
     const stamp = nowStamp();
     if (touch) {
-      for (const r of s.plan.rows) {
-        if (r.kind === 'section') continue;
+      const rowsBefore = new Map(before.ids.map((id, i) => [id, before.rows[i]]));
+      s.plan.rows.forEach((r, i) => {
+        if (r.kind === 'section') return;
         const b = rowsBefore.get(r.id);
-        if (b != null && b !== JSON.stringify(r)) r.updatedAt = stamp;
-      }
+        if (b != null && b !== after.rows[i]) r.updatedAt = stamp;
+      });
     }
     s.plan.updatedAt = stamp;
     if (undo) {
-      s.undoStack.push(before);
-      if (s.undoStack.length > MAX_UNDO) s.undoStack.shift();
+      H.push(s.undoStack, before);
       s.redoStack.length = 0;
     }
     s.lastLabel = label;
@@ -145,13 +147,14 @@ export function createStore({ plan, storage, readOnly = false, embedded = false,
 
   const restore = (from, to) => {
     if (s.readOnly || !from.length) return false;
-    to.push(JSON.stringify(s.plan));
-    s.plan = normalizePlan(JSON.parse(from.pop()));
+    H.push(to, H.snap(s.plan));
+    s.plan = normalizePlan(H.restore(from.pop()));
     s.derive(false);
     s.persist();
     s.emit('change');
     return true;
   };
+  s.historyBytes = () => H.bytes(s.undoStack) + H.bytes(s.redoStack);
   s.undo = () => restore(s.undoStack, s.redoStack);
   s.redo = () => restore(s.redoStack, s.undoStack);
 

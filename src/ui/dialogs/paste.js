@@ -15,6 +15,8 @@ const ORDER_TEXT = {
   none: '',
 };
 
+const droppedNote = (n) => (n ? ` ${n} circular or invalid link${n === 1 ? ' was' : 's were'} removed.` : '');
+
 export async function openPasteImport(app, initialText = '') {
   const store = app.store;
   const st = { table: [], headers: [], mapping: {}, sig: '', userOrder: false, result: null };
@@ -146,19 +148,20 @@ export async function openPasteImport(app, initialText = '') {
     const plan = createPlan({ name: 'Imported plan' });
     const res = importTable(plan, table, o);
     plan.rows = res.rows;
-    sanitizeLinks(plan.rows);
+    const dropped = sanitizeLinks(plan.rows).length;
     const starts = plan.rows.filter((x) => x.kind !== 'section').map((x) => x.start).sort();
     if (starts.length) plan.start = starts[0];
     app.addPlan(plan);
-    app.toast(`Imported ${starts.length} tasks into a new plan.`);
+    app.toast(`Imported ${starts.length} tasks into a new plan.${droppedNote(dropped)}`, dropped ? 'warn' : 'info');
   } else {
     let n = 0;
+    let dropped = 0;
     store.commit('Paste import', (plan) => {
       const res = importTable(plan, table, o);
       plan.rows.push(...res.rows);
       n = res.rows.filter((x) => x.kind !== 'section').length;
-      sanitizeLinks(plan.rows);
+      dropped = sanitizeLinks(plan.rows).length;
     });
-    app.toast(`Imported ${n} tasks.`);
+    app.toast(`Imported ${n} tasks.${droppedNote(dropped)}`, dropped ? 'warn' : 'info');
   }
 }

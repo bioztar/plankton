@@ -50,7 +50,10 @@ function inline(escaped) {
 
 /** Render the markdown subset to safe HTML. */
 export function renderMarkdown(src) {
-  const lines = String(src == null ? '' : src).replace(/\r\n?/g, '\n').split('\n');
+  // Control characters are dropped up front: they are never meaningful in a
+  // description and \u0000 / \u0001 are used as placeholders below.
+  const text = String(src == null ? '' : src).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
   const out = [];
   let para = [];
   let list = null;

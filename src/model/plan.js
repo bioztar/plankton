@@ -1,7 +1,8 @@
 // Plan data model: defaults, normalisation of untrusted JSON and serialisation.
-import { isISODate, parseISO, toISO, todayISO, nextWorkday, finishFromDuration, durationFromDates } from '../schedule/calendar.js';
+import { clampDuration, clampLag, MAX_DURATION, isISODate, parseISO, toISO, todayISO, nextWorkday, finishFromDuration, durationFromDates } from '../schedule/calendar.js';
 import { LINK_TYPES } from '../schedule/links.js';
 import { normalizeLevels } from './tree.js';
+import { sanitizeLinks } from '../schedule/engine.js';
 
 export const SCHEMA_VERSION = 1;
 export const STATUSES = ['Not started', 'In progress', 'Blocked', 'Done'];
@@ -60,7 +61,7 @@ export function createTask(plan, fields = {}) {
   const start = fields.start || plan.start || todayISO();
   const s = nextWorkday(parseISO(start));
   const milestone = !!fields.milestone;
-  const duration = milestone ? 0 : fields.duration != null ? Math.max(1, fields.duration | 0) : 1;
+  const duration = milestone ? 0 : fields.duration != null ? Math.max(1, clampDuration(fields.duration)) : 1;
   const stamp = nowStamp();
   return {
     id: fields.id != null ? fields.id : nextId(plan),
@@ -134,12 +135,16 @@ function normTask(t, plan) {
   const milestone = !!t.milestone;
   let start = isISODate(t.start) ? t.start : plan.start;
   let finish = isISODate(t.finish) ? t.finish : null;
-  let duration = Number.isFinite(+t.duration) ? Math.max(0, Math.round(+t.duration)) : null;
+  let duration = Number.isFinite(+t.duration) ? clampDuration(t.duration) : null;
   if (milestone) {
     duration = 0;
     finish = start;
   } else if (finish && parseISO(finish) >= parseISO(start)) {
     duration = Math.max(1, durationFromDates(parseISO(start), parseISO(finish)));
+    if (duration > MAX_DURATION) {
+      duration = MAX_DURATION;
+      finish = toISO(finishFromDuration(parseISO(start), duration));
+    }
   } else {
     duration = Math.max(1, duration || 1);
     finish = toISO(finishFromDuration(parseISO(start), duration));
@@ -147,7 +152,7 @@ function normTask(t, plan) {
   const preds = Array.isArray(t.preds)
     ? t.preds
         .filter((p) => p && Number.isInteger(+p.id))
-        .map((p) => ({ id: +p.id, type: pick(String(p.type || 'FS').toUpperCase(), LINK_TYPES, 'FS'), lag: Math.round(+p.lag || 0) }))
+        .map((p) => ({ id: +p.id, type: pick(String(p.type || 'FS').toUpperCase(), LINK_TYPES, 'FS'), lag: clampLag(p.lag) }))
     : [];
   const baseline =
     t.baseline && isISODate(t.baseline.start) && isISODate(t.baseline.finish)
@@ -204,8 +209,12 @@ function normLog(list, kind) {
     });
 }
 
-/** Validate and fill defaults on a plan from untrusted JSON. Throws on non-plans. */
-export function normalizePlan(input) {
+/**
+ * Validate and fill defaults on a plan from untrusted JSON. Throws on non-plans.
+ * Links that would form a cycle (or point at sections) are removed; pass a
+ * `report` object to receive them as `report.droppedLinks`.
+ */
+export function normalizePlan(input, report) {
   if (!input || typeof input !== 'object' || !Array.isArray(input.rows)) {
     throw new Error('Not a planboard plan (missing "rows").');
   }
@@ -258,6 +267,8 @@ export function normalizePlan(input) {
     decisions: normLog(logs.decisions, 'decisions'),
     questions: normLog(logs.questions, 'questions'),
   };
+  const dropped = sanitizeLinks(plan.rows);
+  if (report) report.droppedLinks = dropped;
   return plan;
 }
 
@@ -265,7 +276,7 @@ export function serializePlan(plan, pretty = true) {
   return JSON.stringify(plan, null, pretty ? 2 : 0);
 }
 
-export function parsePlanJSON(text) {
+export function parsePlanJSON(text, report) {
   let data;
   try {
     data = JSON.parse(text);
@@ -273,7 +284,7 @@ export function parsePlanJSON(text) {
     throw new Error('File is not valid JSON.');
   }
   if (data && data.plan && Array.isArray(data.plan.rows)) data = data.plan;
-  return normalizePlan(data);
+  return normalizePlan(data, report);
 }
 
 export function clonePlan(plan) {
