@@ -1846,6 +1846,7 @@ const __util_htmlparse = (() => {
 // same, idempotent result everywhere. Lenient like a browser: unknown end tags
 // are ignored, raw-text elements (script, style, …) swallow up to their end tag.
 const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr', 'image']);
+const MAX_NEST = 128;
 const RAW = new Set(['script', 'style', 'textarea', 'title', 'xmp', 'iframe', 'noembed', 'noframes', 'plaintext']);
 const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0', copy: '©', middot: '·', hellip: '…', mdash: '—', ndash: '–', bull: '•',
   lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”', laquo: '«', raquo: '»', euro: '€', pound: '£', reg: '®', trade: '™', times: '×', deg: '°', shy: '\u00ad', ensp: '\u2002', emsp: '\u2003', thinsp: '\u2009' };
@@ -1903,12 +1904,51 @@ function parseHTML(html) {
   const stack = [body];
   const top = () => stack[stack.length - 1];
   const s = String(html);
+  const lower = s.toLowerCase();
   let i = 0;
   const text = (t) => {
     if (!t) return;
+    const p = top();
+    const last = p.childNodes[p.childNodes.length - 1];
+    if (last && last.nodeType === 3) {
+      last.nodeValue += decodeEntities(t);
+      return;
+    }
     const n = new LiteNode(3, '#text');
     n.nodeValue = decodeEntities(t);
-    top().append(n);
+    p.append(n);
+  };
+  // Linear tag scan: quotes only open after "=", and once a quote char has no
+  // later match it is never searched for again, so hostile input such as
+  // `<a "` repeated cannot make the scan quadratic.
+  const noQuote = { '"': false, "'": false };
+  const scanTag = (at) => {
+    let j = at + 1;
+    const close = s[j] === '/';
+    if (close) j++;
+    const c0 = s.charCodeAt(j) | 32;
+    if (!(c0 >= 97 && c0 <= 122)) return 'text';
+    const ns = j;
+    while (j < s.length && !/[\s/>]/.test(s[j])) j++;
+    const name = lower.slice(ns, j);
+    const as = j;
+    let prev = '';
+    while (j < s.length) {
+      const ch = s[j];
+      if (ch === '>') return { close, name, attrs: s.slice(as, j), end: j + 1 };
+      if ((ch === '"' || ch === "'") && prev === '=' && !noQuote[ch]) {
+        const q = s.indexOf(ch, j + 1);
+        if (q < 0) noQuote[ch] = true;
+        else {
+          j = q + 1;
+          prev = ch;
+          continue;
+        }
+      }
+      if (!/\s/.test(ch)) prev = ch;
+      j++;
+    }
+    return 'eof';
   };
   while (i < s.length) {
     const lt = s.indexOf('<', i);
@@ -1931,15 +1971,20 @@ function parseHTML(html) {
       i = end < 0 ? s.length : end + 1;
       continue;
     }
-    const m = /^<(\/?)([a-zA-Z][^\s/>]*)((?:[^>"']|"[^"]*"|'[^']*')*)>/.exec(s.slice(i));
-    if (!m) {
+    const m = scanTag(i);
+    if (m === 'eof') {
+      // An unterminated tag runs to the end: keep the rest as text.
+      text(s.slice(i));
+      break;
+    }
+    if (m === 'text') {
       text('<');
       i++;
       continue;
     }
-    i += m[0].length;
-    const name = m[2].toLowerCase();
-    if (m[1]) {
+    i = m.end;
+    const name = m.name;
+    if (m.close) {
       for (let k = stack.length - 1; k > 0; k--) {
         if (stack[k].nodeName === name) {
           stack.length = k;
@@ -1950,21 +1995,21 @@ function parseHTML(html) {
     }
     if (name === 'html' || name === 'body' || name === 'head') continue;
     const el = new LiteNode(1, name);
-    parseAttrs(m[3], el);
+    parseAttrs(m.attrs, el);
     if (name === 'p' || /^h[1-6]$/.test(name) || name === 'li' || name === 'tr' || name === 'td' || name === 'th') {
       const closes = { p: ['p'], li: ['li', 'p'], tr: ['tr', 'td', 'th'], td: ['td', 'th', 'p'], th: ['td', 'th', 'p'] }[name] || ['p'];
       if (closes.includes(top().nodeName)) stack.pop();
     }
     top().append(el);
     if (RAW.has(name)) {
-      const end = s.toLowerCase().indexOf(`</${name}`, i);
+      const end = lower.indexOf(`</${name}`, i);
       const t = new LiteNode(3, '#text');
       t.nodeValue = s.slice(i, end < 0 ? s.length : end);
       el.append(t);
       i = end < 0 ? s.length : s.indexOf('>', end) + 1 || s.length;
       continue;
     }
-    if (!VOID.has(name)) stack.push(el);
+    if (!VOID.has(name) && stack.length < MAX_NEST) stack.push(el);
   }
   return doc;
 }
@@ -2877,7 +2922,10 @@ function applyOptionList(plan, target, items) {
   if (target === 'status') plan.options = { ...(plan.options || {}), status: kept.map((k) => ({ name: k.name, color: COLOR_RE.test(k.color) ? k.color : OPTION_COLORS[0], complete: !!k.complete })), priority: priorityOptions(plan).map((o) => ({ ...o })) };
   else if (target === 'priority') plan.options = { status: statusOptions(plan).map((o) => ({ ...o })), ...(plan.options || {}), priority: kept.map((k) => ({ name: k.name, color: COLOR_RE.test(k.color) ? k.color : OPTION_COLORS[0] })) };
   else field.options = normOptions(kept.map((k) => k.name));
-  for (const [r, , nv] of changes) {
+  const finalNames = target === 'status' ? plan.options.status.map((o) => o.name) : target === 'priority' ? plan.options.priority.map((o) => o.name) : field.options;
+  const resolve = (v) => (v === '' ? '' : finalNames.find((n) => same(n, v)) ?? (builtIn ? finalNames[0] : ''));
+  for (const [r, , raw] of changes) {
+    const nv = resolve(raw);
     if (builtIn) r[target] = nv;
     else if (nv === '') delete r.values[target];
     else r.values[target] = nv;
@@ -4243,6 +4291,8 @@ const { computeTree, isTask } = __model_tree;
 
 const MAX_VERSIONS = 50;
 const MAX_HISTORY_BYTES = 5 * 1024 * 1024;
+/** Largest decoded snapshot accepted (gzip can expand a small file a lot). */
+const MAX_SNAPSHOT_BYTES = 50 * 1024 * 1024;
 const MAX_CHANGES = 14;
 
 // ---- snapshots -------------------------------------------------------------
@@ -4277,36 +4327,91 @@ async function encodeSnapshot(plan, { compress = canCompress() } = {}) {
   return { enc: 'json', data: json };
 }
 
-/** Snapshot → plan object (untrusted: normalise before use). Throws when unreadable. */
-async function decodeSnapshot(snap) {
-  if (!snap || typeof snap.data !== 'string') throw new Error('This version has no snapshot.');
-  if (snap.enc === 'json') return JSON.parse(snap.data);
-  if (snap.enc === 'gzip-base64') {
-    if (typeof globalThis.DecompressionStream !== 'function') throw new Error('This browser cannot read compressed versions.');
-    return JSON.parse(new TextDecoder().decode(await pipe(fromBase64(snap.data), new DecompressionStream('gzip'))));
+const tooBig = (max) => new Error(`This version is too large to open (over ${Math.round(max / 1048576)} MB).`);
+
+/** Stream-inflate gzip bytes; abort as soon as the output passes `max` bytes. */
+async function inflate(bytes, max) {
+  const reader = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip')).getReader();
+  const parts = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > max) {
+      reader.cancel().catch(() => {});
+      throw tooBig(max);
+    }
+    parts.push(value);
   }
-  throw new Error(`Unknown snapshot format “${String(snap.enc).slice(0, 20)}”.`);
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const p of parts) {
+    out.set(p, at);
+    at += p.length;
+  }
+  return out;
+}
+
+/** Snapshot → plan object (untrusted: normalise before use). Throws a readable error when unreadable or too large. */
+async function decodeSnapshot(snap, { maxBytes = MAX_SNAPSHOT_BYTES } = {}) {
+  if (!snap || typeof snap.data !== 'string') throw new Error('This version has no snapshot.');
+  if (snap.enc !== 'json' && snap.enc !== 'gzip-base64') throw new Error(`Unknown snapshot format “${String(snap.enc).slice(0, 20)}”.`);
+  let json;
+  if (snap.enc === 'json') {
+    if (snap.data.length > maxBytes) throw tooBig(maxBytes);
+    json = snap.data;
+  } else {
+    if (typeof globalThis.DecompressionStream !== 'function') throw new Error('This browser cannot read compressed versions.');
+    let bytes;
+    try {
+      bytes = await inflate(fromBase64(snap.data), maxBytes);
+    } catch (e) {
+      if (e && /too large/.test(e.message)) throw e;
+      throw new Error('This version’s snapshot is damaged.');
+    }
+    json = new TextDecoder().decode(bytes);
+  }
+  try {
+    return JSON.parse(json);
+  } catch (e) {
+    throw new Error('This version’s snapshot is damaged.');
+  }
 }
 
 // ---- the history list ------------------------------------------------------
 
 const str = (v, max) => (v == null ? '' : String(v).slice(0, max));
 
-/** Validate a history list from a file; oldest first. */
-function normHistory(list) {
+const B64 = /^[A-Za-z0-9+/]*={0,2}$/;
+/** A snapshot is kept only when its format is known and it fits the history budget on its own. */
+function validSnapshot(snap) {
+  if (!snap || typeof snap.data !== 'string' || !snap.data || snap.data.length > MAX_HISTORY_BYTES) return false;
+  if (snap.enc === 'json') return true;
+  return snap.enc === 'gzip-base64' && snap.data.length % 4 === 0 && B64.test(snap.data);
+}
+
+/** Validate a history list from a file (untrusted); oldest first, capped like appendVersion. */
+function normHistory(list, opts) {
   if (!Array.isArray(list)) return [];
   const out = [];
-  for (const v of list) {
-    if (!v || typeof v !== 'object' || !Number.isInteger(v.n) || v.n < 1 || !v.snapshot || typeof v.snapshot.data !== 'string') continue;
-    out.push({
+  const seen = new Set();
+  for (const v of list.slice(-MAX_VERSIONS * 4)) {
+    if (!v || typeof v !== 'object' || !Number.isInteger(v.n) || v.n < 1 || !validSnapshot(v.snapshot)) continue;
+    const e = {
       n: v.n,
       savedAt: str(v.savedAt, 40),
       author: str(v.author, 80),
       changes: Array.isArray(v.changes) ? v.changes.slice(0, MAX_CHANGES + 1).map((c) => str(c, 300)) : [],
-      snapshot: { enc: str(v.snapshot.enc, 20), data: v.snapshot.data },
-    });
+      snapshot: { enc: v.snapshot.enc, data: v.snapshot.data },
+    };
+    const key = `${e.n}@${e.savedAt}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(e);
   }
-  return out.sort((a, b) => a.n - b.n || (Date.parse(a.savedAt) || 0) - (Date.parse(b.savedAt) || 0));
+  out.sort((a, b) => a.n - b.n || (Date.parse(a.savedAt) || 0) - (Date.parse(b.savedAt) || 0));
+  return capHistory(out, opts);
 }
 
 const utf8Len = (s) => (typeof TextEncoder === 'function' ? new TextEncoder().encode(s).length : s.length);
@@ -4314,12 +4419,12 @@ const historyBytes = (list) => utf8Len(JSON.stringify(list || []));
 const nextVersionNumber = (list) => (list && list.length ? Math.max(...list.map((v) => v.n)) : 0) + 1;
 
 /**
- * Append a version and drop the oldest until at most `maxVersions` remain and
- * the list fits `maxBytes` (the newest version is always kept).
+ * Drop the oldest versions until at most `maxVersions` remain and the list
+ * fits `maxBytes` (the newest version is always kept).
  */
-function appendVersion(list, entry, { maxVersions = MAX_VERSIONS, maxBytes = MAX_HISTORY_BYTES } = {}) {
-  const out = [...(list || []), entry];
-  while (out.length > maxVersions) out.shift();
+function capHistory(list, { maxVersions = MAX_VERSIONS, maxBytes = MAX_HISTORY_BYTES } = {}) {
+  const out = [...(list || [])];
+  if (out.length > maxVersions) out.splice(0, out.length - maxVersions);
   if (out.length > 1) {
     const sizes = out.map((v) => utf8Len(JSON.stringify(v)) + 1);
     let total = sizes.reduce((a, b) => a + b, 1);
@@ -4331,11 +4436,14 @@ function appendVersion(list, entry, { maxVersions = MAX_VERSIONS, maxBytes = MAX
   return out;
 }
 
-/** Union of two histories of the same file (e.g. this tab's and the one on disk). */
-function mergeHistories(a, b) {
+/** Append a version, then cap (see capHistory). */
+const appendVersion = (list, entry, opts) => capHistory([...(list || []), entry], opts);
+
+/** Union of two histories of the same file (e.g. this tab's and the one on disk), capped. */
+function mergeHistories(a, b, opts) {
   const m = new Map();
   for (const v of [...(a || []), ...(b || [])]) m.set(`${v.n}@${v.savedAt}`, v);
-  return [...m.values()].sort((x, y) => (Date.parse(x.savedAt) || 0) - (Date.parse(y.savedAt) || 0) || x.n - y.n);
+  return capHistory([...m.values()].sort((x, y) => (Date.parse(x.savedAt) || 0) - (Date.parse(y.savedAt) || 0) || x.n - y.n), opts);
 }
 
 /** Build the next version entry for `plan` (prev = the last saved plan or null). */
@@ -4440,7 +4548,7 @@ function replacePlanContents(target, source) {
   Object.assign(target, JSON.parse(JSON.stringify(source)), { id });
   return target;
 }
-return { MAX_VERSIONS, MAX_HISTORY_BYTES, canCompress, encodeSnapshot, decodeSnapshot, normHistory, historyBytes, nextVersionNumber, appendVersion, mergeHistories, makeVersion, summarizeChanges, replacePlanContents };
+return { MAX_VERSIONS, MAX_HISTORY_BYTES, MAX_SNAPSHOT_BYTES, canCompress, encodeSnapshot, decodeSnapshot, normHistory, historyBytes, nextVersionNumber, capHistory, appendVersion, mergeHistories, makeVersion, summarizeChanges, replacePlanContents };
 })();
 
 // ---- io/filesave.js
@@ -4606,9 +4714,16 @@ function createFileSaver(env) {
   let known = new Set();
   let ready = Promise.resolve();
 
-  const fallback = (o, reason) => {
-    env.download(o.downloadName, o.html);
+  // o.html may be a function (diskPayload | null) => html, called once with the
+  // same plan's payload read from the target file (to merge its history).
+  const render = async (o, disk = null) => (typeof o.html === 'function' ? o.html(disk) : o.html);
+  const fallback = async (o, reason) => {
+    env.download(o.downloadName, await render(o));
     return { status: 'downloaded', name: o.downloadName, reason };
+  };
+  const samePlan = (text, id) => {
+    const p = text ? extractPayload(text) : null;
+    return p && p.plan && p.plan.id === id ? p : null;
   };
 
   return {
@@ -4619,7 +4734,7 @@ function createFileSaver(env) {
     get connected() {
       return !!handle;
     },
-    /** Remember `h` (e.g. from File › Open & connect) as the file of the bound plan. */
+    /** Remember `h` (e.g. from File › Open & connect file…) as the file of the bound plan. */
     async connect(id, h, stamp) {
       await ready;
       if (id !== planId) return false;
@@ -4646,6 +4761,7 @@ function createFileSaver(env) {
       if (!supported) return fallback(o, 'unsupported');
       await ready;
       let h = o.saveAs || o.planId !== planId ? null : handle;
+      let disk = null;
       if (h) {
         if ((await ensurePermission(h)) !== 'granted') return fallback(o, 'denied');
         let text = null;
@@ -4663,6 +4779,7 @@ function createFileSaver(env) {
           if (choice === 'saveas') h = null;
           else if (choice !== 'overwrite') return { status: 'cancelled' };
         }
+        if (h) disk = samePlan(text, o.planId);
       }
       let picked = false;
       if (!h) {
@@ -4674,10 +4791,16 @@ function createFileSaver(env) {
           if (e && e.name === 'AbortError') return { status: 'cancelled' };
           return fallback(o, 'picker');
         }
+        try {
+          disk = samePlan(await (await h.getFile()).text(), o.planId);
+        } catch (e) {
+          /* new or unreadable file: nothing to merge */
+        }
       }
+      const html = await render(o, disk);
       try {
         const w = await h.createWritable();
-        await w.write(o.html);
+        await w.write(html);
         await w.close();
       } catch (e) {
         if (e && e.name === 'NotAllowedError') return fallback(o, 'denied');
@@ -5332,6 +5455,7 @@ return { fmtDate, fmtDateLong, fmtStamp, fmtVariance, statusSlug };
 
 // ---- model/cells.js
 const __model_cells = (() => {
+const { isComplete } = __model_options;
 const { computeTree, isTask } = __model_tree;
 const { setTaskField, predsText, setPredsFromText } = __model_edit;
 const { fieldKey, setFieldValue } = __model_fields;
@@ -5343,9 +5467,12 @@ const { fieldKey, setFieldValue } = __model_fields;
 
 
 
+
 const READONLY_COLS = new Set(['num', 'variance', 'id']);
 // Columns a summary task rolls up from its subtasks.
 const ROLLUP_COLS = new Set(['start', 'finish', 'duration', 'progress', 'status']);
+/** Built-in columns that cannot be blank (a cleared cell keeps its value). */
+const REQUIRED_COLS = new Set(['name', 'start', 'finish', 'duration', 'status', 'priority']);
 const MAX_PASTE_CELLS = 20000;
 
 /** Normalised range { r1, c1, r2, c2 } from two corners { r, c }. */
@@ -5470,7 +5597,8 @@ function fillHandleTargets(sel, toRow) {
  * coercing each value for its column (built-in or custom). Cells that cannot
  * take the value are skipped: kind 'rollup' (summary rows: dates, duration,
  * progress, status), 'section' (section rows, except the name), 'readonly'
- * (computed columns), 'invalid' (value rejected; `reason` says why).
+ * (computed columns), 'required' (blank value for a column that needs one),
+ * 'invalid' (value rejected; `reason` says why).
  * Returns { applied, skipped: [{ id, col, value, kind, reason }] }.
  */
 function applyCellEdits(plan, edits, labels = {}) {
@@ -5489,7 +5617,7 @@ function applyCellEdits(plan, edits, labels = {}) {
     }
     if (!isTask(r)) {
       if (e.col !== 'name') skip(e, 'section');
-      else if (!value.trim()) skip(e, 'invalid', 'Section name cannot be empty.');
+      else if (!value.trim()) skip(e, 'required', 'Section name cannot be empty.');
       else if (r.name !== value.trim().slice(0, 300)) {
         r.name = value.trim().slice(0, 300);
         applied++;
@@ -5504,6 +5632,10 @@ function applyCellEdits(plan, edits, labels = {}) {
       skip(e, 'invalid', 'A milestone has no separate finish date.');
       continue;
     }
+    if (!value.trim() && (REQUIRED_COLS.has(e.col) || (e.col === 'progress' && isComplete(plan, r.status)))) {
+      skip(e, 'required', `${labels[e.col] || e.col} cannot be empty.`);
+      continue;
+    }
     const before = JSON.stringify(r);
     let err = null;
     const f = fieldOf(plan, e.col);
@@ -5511,9 +5643,8 @@ function applyCellEdits(plan, edits, labels = {}) {
     else if (e.col === 'preds') {
       const errs = setPredsFromText(plan.rows, r.id, value);
       if (errs.length) err = errs.join(' ');
-    } else if (e.col === 'name') err = value.trim() ? setTaskField(r, 'name', value, undefined, plan) : 'Task name cannot be empty.';
+    } else if (e.col === 'name') err = setTaskField(r, 'name', value, undefined, plan);
     else if (e.col === 'progress') err = setTaskField(r, 'progress', value.trim() === '' ? '0' : value, undefined, plan);
-    else if (!value.trim() && ['start', 'finish', 'duration', 'status', 'priority'].includes(e.col)) err = `${labels[e.col] || e.col} cannot be empty.`;
     else err = setTaskField(r, e.col, value.trim(), undefined, plan);
     if (err) {
       if (e.col !== 'preds') Object.assign(r, JSON.parse(before));
@@ -5532,7 +5663,7 @@ function skipSummary(skipped, labels = {}) {
   const roll = by('rollup').length;
   const sec = by('section').length;
   const ro = by('readonly').length;
-  const bad = by('invalid');
+  const bad = [...by('required'), ...by('invalid')];
   if (roll) parts.push(`${roll} on summary rows (dates, progress and status roll up)`);
   if (sec) parts.push(`${sec} on section rows`);
   if (ro) parts.push(`${ro} in read-only columns`);
@@ -5543,7 +5674,7 @@ function skipSummary(skipped, labels = {}) {
   }
   return `${n} cell${n === 1 ? '' : 's'} skipped: ${parts.join(' · ')}`;
 }
-return { READONLY_COLS, ROLLUP_COLS, MAX_PASTE_CELLS, normRange, rangeSize, parseTSV, toTSV, cellText, pasteTargets, fillDownTargets, fillHandleTargets, applyCellEdits, skipSummary };
+return { READONLY_COLS, ROLLUP_COLS, REQUIRED_COLS, MAX_PASTE_CELLS, normRange, rangeSize, parseTSV, toTSV, cellText, pasteTargets, fillDownTargets, fillHandleTargets, applyCellEdits, skipSummary };
 })();
 
 // ---- ui/grid/grid.js
@@ -5861,7 +5992,7 @@ function createGrid(app, root) {
     if (!g) return;
     const cells = [];
     for (let r = g.r1; r <= g.r2; r++) for (let c = g.c1; c <= g.c2; c++) cells.push({ r, c, value: '' });
-    applyCells('Clear cells', cells, null, ['section', 'rollup', 'readonly']);
+    applyCells('Clear cells', cells, null, ['section', 'rollup', 'readonly', 'required']);
   }
   function fromCells(targets) {
     return targets.map((x) => ({ r: x.r, c: x.c, value: cellText(store.plan, store.d.tree, store.d.visible[x.from.r], cols[x.from.c].key) }));
@@ -6196,8 +6327,13 @@ function createGrid(app, root) {
   document.addEventListener('paste', (e) => {
     if (!gridFocused()) return;
     e.preventDefault();
-    const text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
-    pasteText(text || clip);
+    // The grid's own copy is only a fallback for browsers without clipboardData;
+    // a system clipboard holding non-text (an image, files) pastes nothing.
+    if (!e.clipboardData) return pasteText(clip);
+    const text = e.clipboardData.getData('text/plain');
+    if (text) pasteText(text);
+    else app.toast('The clipboard holds no text to paste.', 'info', 3000);
+    return undefined;
   });
 
   // ---- mouse ---------------------------------------------------------------
@@ -9622,7 +9758,7 @@ function boot(sourceHtml) {
     const fileName = suggestedFileName(location.href, '');
     const r = await modal({
       title: 'Connect Save to this file',
-      body: `<p><b>Pick this same file once so Save can write to it from now on.</b></p><p>Browsers cannot write to a page's own file without your permission. In the next dialog choose ${fileName ? `“${esc(fileName)}” (already filled in)` : 'the .html file you opened'} and confirm replacing it.</p><p class="hint">Edge / Chrome may offer “Allow on every visit”: choose it and Save never asks again. File › Open & connect… does the same from an Open dialog.</p>`,
+      body: `<p><b>Pick this same file once so Save can write to it from now on.</b></p><p>Browsers cannot write to a page's own file without your permission. In the next dialog choose ${fileName ? `“${esc(fileName)}” (already filled in)` : 'the .html file you opened'} and confirm replacing it.</p><p class="hint">Edge / Chrome may offer “Allow on every visit”: choose it and Save never asks again. File › Open & connect file… does the same from an Open dialog.</p>`,
       actions: [{ label: 'Cancel', value: 'cancel' }, { label: 'Pick the file…', value: 'ok', primary: true }],
     });
     return r.value === 'ok';
@@ -9663,10 +9799,15 @@ function boot(sourceHtml) {
     const data = plainPlan(store.plan);
     let r;
     let list = hist.list;
+    // Called by the saver once it knows the target file: versions that exist
+    // only on disk are merged in, and the file and the version share `data`.
+    const render = async (disk) => {
+      const base = disk ? mergeHistories(hist.list, normHistory(disk.history)) : hist.list;
+      list = appendVersion(base, await makeVersion(base, data, hist.base, { author, at: stamp }));
+      return embedPayload(sourceHtml, buildPayload(data, { at: stamp, history: list }));
+    };
     try {
-      list = appendVersion(hist.list, await makeVersion(hist.list, data, hist.base, { author, at: stamp }));
-      const html = embedPayload(sourceHtml, buildPayload(store.plan, { at: stamp, history: list }));
-      r = await saver.save({ planId, html, stamp, saveAs, suggestedName: suggestedFileName(location.href, name), downloadName: name });
+      r = await saver.save({ planId, html: render, stamp, saveAs, suggestedName: suggestedFileName(location.href, name), downloadName: name });
     } catch (e) {
       r = { status: 'failed', error: (e && e.message) || String(e) };
     }
@@ -9830,7 +9971,7 @@ function boot(sourceHtml) {
     items.push({ heading: 'Export' });
     if (!ro) {
       items.push({ label: 'Save', hint: `${K}+S`, action: () => saveToFile(false) }, { label: 'Save as…', hint: `Shift+${K}+S`, action: () => saveToFile(true) });
-      if (saver.supported) items.push({ label: saver.connected ? `Open & connect… (connected: ${saver.fileName})` : 'Open & connect…', action: openAndConnect });
+      items.push({ label: saver.connected ? `Open & connect file… (connected: ${saver.fileName})` : 'Open & connect file…', action: openAndConnect });
     }
     items.push({ label: 'Version history…', action: versionHistory });
     items.push(
@@ -10247,7 +10388,7 @@ ${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x)
     modal({
       title: 'Keyboard shortcuts & tips',
       wide: true,
-      body: `<table class="kbd-table">${rows.map(([k, v]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(v)}</td></tr>`).join('')}</table><h3 class="help-h">How to share</h3><ol class="help-share"><li>Put this .html file on OneDrive, Teams or SharePoint (or any shared folder).</li><li>Open it in Edge or Chrome, for example from the synced OneDrive folder.</li><li>Edit, then press <b>Save</b> (${esc(K)}+S). The first time, pick the original file once (or use File › Open & connect…); after that Save writes straight to it. Every Save adds a version to File › Version history.</li><li>In Safari or Firefox, Save downloads an updated copy: replace the original file with it.</li></ol><p class="hint">Edits are also autosaved in this browser (localStorage) as a safety net. Export JSON for backups; File → Export read-only presenter copy makes a version others cannot edit.</p>`,
+      body: `<table class="kbd-table">${rows.map(([k, v]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(v)}</td></tr>`).join('')}</table><h3 class="help-h">How to share</h3><ol class="help-share"><li>Put this .html file on OneDrive, Teams or SharePoint (or any shared folder).</li><li>Open it in Edge or Chrome, for example from the synced OneDrive folder.</li><li>Edit, then press <b>Save</b> (${esc(K)}+S). The first time, pick the original file once (or use File › Open & connect file…); after that Save writes straight to it. Every Save adds a version to File › Version history.</li><li>In Safari or Firefox, Save downloads an updated copy: replace the original file with it.</li></ol><p class="hint">Edits are also autosaved in this browser (localStorage) as a safety net. Export JSON for backups; File → Export read-only presenter copy makes a version others cannot edit.</p>`,
       actions: [{ label: 'Close', value: 'cancel', primary: true }],
     });
   }

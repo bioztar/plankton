@@ -158,9 +158,16 @@ export function createFileSaver(env) {
   let known = new Set();
   let ready = Promise.resolve();
 
-  const fallback = (o, reason) => {
-    env.download(o.downloadName, o.html);
+  // o.html may be a function (diskPayload | null) => html, called once with the
+  // same plan's payload read from the target file (to merge its history).
+  const render = async (o, disk = null) => (typeof o.html === 'function' ? o.html(disk) : o.html);
+  const fallback = async (o, reason) => {
+    env.download(o.downloadName, await render(o));
     return { status: 'downloaded', name: o.downloadName, reason };
+  };
+  const samePlan = (text, id) => {
+    const p = text ? extractPayload(text) : null;
+    return p && p.plan && p.plan.id === id ? p : null;
   };
 
   return {
@@ -171,7 +178,7 @@ export function createFileSaver(env) {
     get connected() {
       return !!handle;
     },
-    /** Remember `h` (e.g. from File › Open & connect) as the file of the bound plan. */
+    /** Remember `h` (e.g. from File › Open & connect file…) as the file of the bound plan. */
     async connect(id, h, stamp) {
       await ready;
       if (id !== planId) return false;
@@ -198,6 +205,7 @@ export function createFileSaver(env) {
       if (!supported) return fallback(o, 'unsupported');
       await ready;
       let h = o.saveAs || o.planId !== planId ? null : handle;
+      let disk = null;
       if (h) {
         if ((await ensurePermission(h)) !== 'granted') return fallback(o, 'denied');
         let text = null;
@@ -215,6 +223,7 @@ export function createFileSaver(env) {
           if (choice === 'saveas') h = null;
           else if (choice !== 'overwrite') return { status: 'cancelled' };
         }
+        if (h) disk = samePlan(text, o.planId);
       }
       let picked = false;
       if (!h) {
@@ -226,10 +235,16 @@ export function createFileSaver(env) {
           if (e && e.name === 'AbortError') return { status: 'cancelled' };
           return fallback(o, 'picker');
         }
+        try {
+          disk = samePlan(await (await h.getFile()).text(), o.planId);
+        } catch (e) {
+          /* new or unreadable file: nothing to merge */
+        }
       }
+      const html = await render(o, disk);
       try {
         const w = await h.createWritable();
-        await w.write(o.html);
+        await w.write(html);
         await w.close();
       } catch (e) {
         if (e && e.name === 'NotAllowedError') return fallback(o, 'denied');

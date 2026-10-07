@@ -2,6 +2,7 @@
 // over a range, or a block from the active cell), fill down, fill handle and
 // clear. Rows/columns are addressed by index into the visible grid; edits are
 // applied to the plan by id/column key. Pure.
+import { isComplete } from './options.js';
 import { computeTree, isTask } from './tree.js';
 import { setTaskField, predsText, setPredsFromText } from './edit.js';
 import { fieldKey, setFieldValue } from './fields.js';
@@ -9,6 +10,8 @@ import { fieldKey, setFieldValue } from './fields.js';
 export const READONLY_COLS = new Set(['num', 'variance', 'id']);
 // Columns a summary task rolls up from its subtasks.
 export const ROLLUP_COLS = new Set(['start', 'finish', 'duration', 'progress', 'status']);
+/** Built-in columns that cannot be blank (a cleared cell keeps its value). */
+export const REQUIRED_COLS = new Set(['name', 'start', 'finish', 'duration', 'status', 'priority']);
 export const MAX_PASTE_CELLS = 20000;
 
 /** Normalised range { r1, c1, r2, c2 } from two corners { r, c }. */
@@ -133,7 +136,8 @@ export function fillHandleTargets(sel, toRow) {
  * coercing each value for its column (built-in or custom). Cells that cannot
  * take the value are skipped: kind 'rollup' (summary rows: dates, duration,
  * progress, status), 'section' (section rows, except the name), 'readonly'
- * (computed columns), 'invalid' (value rejected; `reason` says why).
+ * (computed columns), 'required' (blank value for a column that needs one),
+ * 'invalid' (value rejected; `reason` says why).
  * Returns { applied, skipped: [{ id, col, value, kind, reason }] }.
  */
 export function applyCellEdits(plan, edits, labels = {}) {
@@ -152,7 +156,7 @@ export function applyCellEdits(plan, edits, labels = {}) {
     }
     if (!isTask(r)) {
       if (e.col !== 'name') skip(e, 'section');
-      else if (!value.trim()) skip(e, 'invalid', 'Section name cannot be empty.');
+      else if (!value.trim()) skip(e, 'required', 'Section name cannot be empty.');
       else if (r.name !== value.trim().slice(0, 300)) {
         r.name = value.trim().slice(0, 300);
         applied++;
@@ -167,6 +171,10 @@ export function applyCellEdits(plan, edits, labels = {}) {
       skip(e, 'invalid', 'A milestone has no separate finish date.');
       continue;
     }
+    if (!value.trim() && (REQUIRED_COLS.has(e.col) || (e.col === 'progress' && isComplete(plan, r.status)))) {
+      skip(e, 'required', `${labels[e.col] || e.col} cannot be empty.`);
+      continue;
+    }
     const before = JSON.stringify(r);
     let err = null;
     const f = fieldOf(plan, e.col);
@@ -174,9 +182,8 @@ export function applyCellEdits(plan, edits, labels = {}) {
     else if (e.col === 'preds') {
       const errs = setPredsFromText(plan.rows, r.id, value);
       if (errs.length) err = errs.join(' ');
-    } else if (e.col === 'name') err = value.trim() ? setTaskField(r, 'name', value, undefined, plan) : 'Task name cannot be empty.';
+    } else if (e.col === 'name') err = setTaskField(r, 'name', value, undefined, plan);
     else if (e.col === 'progress') err = setTaskField(r, 'progress', value.trim() === '' ? '0' : value, undefined, plan);
-    else if (!value.trim() && ['start', 'finish', 'duration', 'status', 'priority'].includes(e.col)) err = `${labels[e.col] || e.col} cannot be empty.`;
     else err = setTaskField(r, e.col, value.trim(), undefined, plan);
     if (err) {
       if (e.col !== 'preds') Object.assign(r, JSON.parse(before));
@@ -195,7 +202,7 @@ export function skipSummary(skipped, labels = {}) {
   const roll = by('rollup').length;
   const sec = by('section').length;
   const ro = by('readonly').length;
-  const bad = by('invalid');
+  const bad = [...by('required'), ...by('invalid')];
   if (roll) parts.push(`${roll} on summary rows (dates, progress and status roll up)`);
   if (sec) parts.push(`${sec} on section rows`);
   if (ro) parts.push(`${ro} in read-only columns`);

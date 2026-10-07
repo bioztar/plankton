@@ -185,7 +185,10 @@ export function applyOptionList(plan, target, items) {
   if (target === 'status') plan.options = { ...(plan.options || {}), status: kept.map((k) => ({ name: k.name, color: COLOR_RE.test(k.color) ? k.color : OPTION_COLORS[0], complete: !!k.complete })), priority: priorityOptions(plan).map((o) => ({ ...o })) };
   else if (target === 'priority') plan.options = { status: statusOptions(plan).map((o) => ({ ...o })), ...(plan.options || {}), priority: kept.map((k) => ({ name: k.name, color: COLOR_RE.test(k.color) ? k.color : OPTION_COLORS[0] })) };
   else field.options = normOptions(kept.map((k) => k.name));
-  for (const [r, , nv] of changes) {
+  const finalNames = target === 'status' ? plan.options.status.map((o) => o.name) : target === 'priority' ? plan.options.priority.map((o) => o.name) : field.options;
+  const resolve = (v) => (v === '' ? '' : finalNames.find((n) => same(n, v)) ?? (builtIn ? finalNames[0] : ''));
+  for (const [r, , raw] of changes) {
+    const nv = resolve(raw);
     if (builtIn) r[target] = nv;
     else if (nv === '') delete r.values[target];
     else r.values[target] = nv;

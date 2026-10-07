@@ -4,6 +4,7 @@
 // same, idempotent result everywhere. Lenient like a browser: unknown end tags
 // are ignored, raw-text elements (script, style, …) swallow up to their end tag.
 const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr', 'image']);
+const MAX_NEST = 128;
 const RAW = new Set(['script', 'style', 'textarea', 'title', 'xmp', 'iframe', 'noembed', 'noframes', 'plaintext']);
 const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0', copy: '©', middot: '·', hellip: '…', mdash: '—', ndash: '–', bull: '•',
   lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”', laquo: '«', raquo: '»', euro: '€', pound: '£', reg: '®', trade: '™', times: '×', deg: '°', shy: '\u00ad', ensp: '\u2002', emsp: '\u2003', thinsp: '\u2009' };
@@ -61,12 +62,51 @@ export function parseHTML(html) {
   const stack = [body];
   const top = () => stack[stack.length - 1];
   const s = String(html);
+  const lower = s.toLowerCase();
   let i = 0;
   const text = (t) => {
     if (!t) return;
+    const p = top();
+    const last = p.childNodes[p.childNodes.length - 1];
+    if (last && last.nodeType === 3) {
+      last.nodeValue += decodeEntities(t);
+      return;
+    }
     const n = new LiteNode(3, '#text');
     n.nodeValue = decodeEntities(t);
-    top().append(n);
+    p.append(n);
+  };
+  // Linear tag scan: quotes only open after "=", and once a quote char has no
+  // later match it is never searched for again, so hostile input such as
+  // `<a "` repeated cannot make the scan quadratic.
+  const noQuote = { '"': false, "'": false };
+  const scanTag = (at) => {
+    let j = at + 1;
+    const close = s[j] === '/';
+    if (close) j++;
+    const c0 = s.charCodeAt(j) | 32;
+    if (!(c0 >= 97 && c0 <= 122)) return 'text';
+    const ns = j;
+    while (j < s.length && !/[\s/>]/.test(s[j])) j++;
+    const name = lower.slice(ns, j);
+    const as = j;
+    let prev = '';
+    while (j < s.length) {
+      const ch = s[j];
+      if (ch === '>') return { close, name, attrs: s.slice(as, j), end: j + 1 };
+      if ((ch === '"' || ch === "'") && prev === '=' && !noQuote[ch]) {
+        const q = s.indexOf(ch, j + 1);
+        if (q < 0) noQuote[ch] = true;
+        else {
+          j = q + 1;
+          prev = ch;
+          continue;
+        }
+      }
+      if (!/\s/.test(ch)) prev = ch;
+      j++;
+    }
+    return 'eof';
   };
   while (i < s.length) {
     const lt = s.indexOf('<', i);
@@ -89,15 +129,20 @@ export function parseHTML(html) {
       i = end < 0 ? s.length : end + 1;
       continue;
     }
-    const m = /^<(\/?)([a-zA-Z][^\s/>]*)((?:[^>"']|"[^"]*"|'[^']*')*)>/.exec(s.slice(i));
-    if (!m) {
+    const m = scanTag(i);
+    if (m === 'eof') {
+      // An unterminated tag runs to the end: keep the rest as text.
+      text(s.slice(i));
+      break;
+    }
+    if (m === 'text') {
       text('<');
       i++;
       continue;
     }
-    i += m[0].length;
-    const name = m[2].toLowerCase();
-    if (m[1]) {
+    i = m.end;
+    const name = m.name;
+    if (m.close) {
       for (let k = stack.length - 1; k > 0; k--) {
         if (stack[k].nodeName === name) {
           stack.length = k;
@@ -108,21 +153,21 @@ export function parseHTML(html) {
     }
     if (name === 'html' || name === 'body' || name === 'head') continue;
     const el = new LiteNode(1, name);
-    parseAttrs(m[3], el);
+    parseAttrs(m.attrs, el);
     if (name === 'p' || /^h[1-6]$/.test(name) || name === 'li' || name === 'tr' || name === 'td' || name === 'th') {
       const closes = { p: ['p'], li: ['li', 'p'], tr: ['tr', 'td', 'th'], td: ['td', 'th', 'p'], th: ['td', 'th', 'p'] }[name] || ['p'];
       if (closes.includes(top().nodeName)) stack.pop();
     }
     top().append(el);
     if (RAW.has(name)) {
-      const end = s.toLowerCase().indexOf(`</${name}`, i);
+      const end = lower.indexOf(`</${name}`, i);
       const t = new LiteNode(3, '#text');
       t.nodeValue = s.slice(i, end < 0 ? s.length : end);
       el.append(t);
       i = end < 0 ? s.length : s.indexOf('>', end) + 1 || s.length;
       continue;
     }
-    if (!VOID.has(name)) stack.push(el);
+    if (!VOID.has(name) && stack.length < MAX_NEST) stack.push(el);
   }
   return doc;
 }

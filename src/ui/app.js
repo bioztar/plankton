@@ -609,7 +609,7 @@ export function boot(sourceHtml) {
     const fileName = suggestedFileName(location.href, '');
     const r = await modal({
       title: 'Connect Save to this file',
-      body: `<p><b>Pick this same file once so Save can write to it from now on.</b></p><p>Browsers cannot write to a page's own file without your permission. In the next dialog choose ${fileName ? `“${esc(fileName)}” (already filled in)` : 'the .html file you opened'} and confirm replacing it.</p><p class="hint">Edge / Chrome may offer “Allow on every visit”: choose it and Save never asks again. File › Open & connect… does the same from an Open dialog.</p>`,
+      body: `<p><b>Pick this same file once so Save can write to it from now on.</b></p><p>Browsers cannot write to a page's own file without your permission. In the next dialog choose ${fileName ? `“${esc(fileName)}” (already filled in)` : 'the .html file you opened'} and confirm replacing it.</p><p class="hint">Edge / Chrome may offer “Allow on every visit”: choose it and Save never asks again. File › Open & connect file… does the same from an Open dialog.</p>`,
       actions: [{ label: 'Cancel', value: 'cancel' }, { label: 'Pick the file…', value: 'ok', primary: true }],
     });
     return r.value === 'ok';
@@ -650,10 +650,15 @@ export function boot(sourceHtml) {
     const data = plainPlan(store.plan);
     let r;
     let list = hist.list;
+    // Called by the saver once it knows the target file: versions that exist
+    // only on disk are merged in, and the file and the version share `data`.
+    const render = async (disk) => {
+      const base = disk ? mergeHistories(hist.list, normHistory(disk.history)) : hist.list;
+      list = appendVersion(base, await makeVersion(base, data, hist.base, { author, at: stamp }));
+      return embedPayload(sourceHtml, buildPayload(data, { at: stamp, history: list }));
+    };
     try {
-      list = appendVersion(hist.list, await makeVersion(hist.list, data, hist.base, { author, at: stamp }));
-      const html = embedPayload(sourceHtml, buildPayload(store.plan, { at: stamp, history: list }));
-      r = await saver.save({ planId, html, stamp, saveAs, suggestedName: suggestedFileName(location.href, name), downloadName: name });
+      r = await saver.save({ planId, html: render, stamp, saveAs, suggestedName: suggestedFileName(location.href, name), downloadName: name });
     } catch (e) {
       r = { status: 'failed', error: (e && e.message) || String(e) };
     }
@@ -817,7 +822,7 @@ export function boot(sourceHtml) {
     items.push({ heading: 'Export' });
     if (!ro) {
       items.push({ label: 'Save', hint: `${K}+S`, action: () => saveToFile(false) }, { label: 'Save as…', hint: `Shift+${K}+S`, action: () => saveToFile(true) });
-      if (saver.supported) items.push({ label: saver.connected ? `Open & connect… (connected: ${saver.fileName})` : 'Open & connect…', action: openAndConnect });
+      items.push({ label: saver.connected ? `Open & connect file… (connected: ${saver.fileName})` : 'Open & connect file…', action: openAndConnect });
     }
     items.push({ label: 'Version history…', action: versionHistory });
     items.push(
@@ -1234,7 +1239,7 @@ ${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x)
     modal({
       title: 'Keyboard shortcuts & tips',
       wide: true,
-      body: `<table class="kbd-table">${rows.map(([k, v]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(v)}</td></tr>`).join('')}</table><h3 class="help-h">How to share</h3><ol class="help-share"><li>Put this .html file on OneDrive, Teams or SharePoint (or any shared folder).</li><li>Open it in Edge or Chrome, for example from the synced OneDrive folder.</li><li>Edit, then press <b>Save</b> (${esc(K)}+S). The first time, pick the original file once (or use File › Open & connect…); after that Save writes straight to it. Every Save adds a version to File › Version history.</li><li>In Safari or Firefox, Save downloads an updated copy: replace the original file with it.</li></ol><p class="hint">Edits are also autosaved in this browser (localStorage) as a safety net. Export JSON for backups; File → Export read-only presenter copy makes a version others cannot edit.</p>`,
+      body: `<table class="kbd-table">${rows.map(([k, v]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(v)}</td></tr>`).join('')}</table><h3 class="help-h">How to share</h3><ol class="help-share"><li>Put this .html file on OneDrive, Teams or SharePoint (or any shared folder).</li><li>Open it in Edge or Chrome, for example from the synced OneDrive folder.</li><li>Edit, then press <b>Save</b> (${esc(K)}+S). The first time, pick the original file once (or use File › Open & connect file…); after that Save writes straight to it. Every Save adds a version to File › Version history.</li><li>In Safari or Firefox, Save downloads an updated copy: replace the original file with it.</li></ol><p class="hint">Edits are also autosaved in this browser (localStorage) as a safety net. Export JSON for backups; File → Export read-only presenter copy makes a version others cannot edit.</p>`,
       actions: [{ label: 'Close', value: 'cancel', primary: true }],
     });
   }

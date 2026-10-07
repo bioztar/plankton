@@ -10,7 +10,8 @@ import { revealCell, columnBox, pinnedWidth } from '../src/ui/grid/reveal.js';
 import { statusNames, priorityNames, isComplete, addOption, renameOption, deleteOption, moveOption, setOptionColor, setOptionComplete, applyOptionList, getOptionList, optionColor } from '../src/model/options.js';
 import { sanitizeHtml, cleanDescHtml, repairEscapedHtml } from '../src/util/sanitize.js';
 import { needsFormulaGuard, toCSV } from '../src/io/csv.js';
-import { appendVersion, makeVersion, decodeSnapshot, encodeSnapshot, summarizeChanges, replacePlanContents, historyBytes, normHistory } from '../src/io/versions.js';
+import { appendVersion, makeVersion, decodeSnapshot, encodeSnapshot, summarizeChanges, replacePlanContents, historyBytes, normHistory, mergeHistories, MAX_VERSIONS, MAX_HISTORY_BYTES } from '../src/io/versions.js';
+import { parseHTML } from '../src/util/htmlparse.js';
 import { createStore } from '../src/ui/state.js';
 
 const COLS = ['num', 'name', 'owner', 'status', 'start', 'duration', 'progress'];
@@ -316,4 +317,88 @@ test('restoring a version replaces the plan in one undoable step', async () => {
   assert.equal(store.plan.rows[0].name, 'T0');
   store.undo();
   assert.equal(store.plan.rows[0].name, 'Changed');
+});
+
+// ---- review fixes ------------------------------------------------------------
+
+test('clearing a range keeps required fields silently (no "cannot be empty")', () => {
+  const p = planWith(2);
+  const sel = normRange({ r: 0, c: 1 }, { r: 1, c: 6 });
+  const edits = [];
+  for (let r = sel.r1; r <= sel.r2; r++) for (let c = sel.c1; c <= sel.c2; c++) edits.push({ id: p.rows[r].id, col: COLS[c], value: '' });
+  p.rows[0].owner = 'Ann';
+  setTaskField(p.rows[1], 'status', 'Done', undefined, p);
+  const res = applyCellEdits(p, edits);
+  assert.equal(p.rows[0].name, 'T0');
+  assert.equal(p.rows[0].start, '2026-10-05');
+  assert.equal(p.rows[0].owner, '');
+  assert.equal(p.rows[0].progress, 0);
+  assert.equal(p.rows[1].progress, 100);
+  const kinds = new Set(res.skipped.map((x) => x.kind));
+  assert.ok(!kinds.has('invalid'), JSON.stringify(res.skipped));
+  assert.ok(kinds.has('required'));
+  // Pasting a blank into a required cell is still reported when not quiet.
+  assert.match(skipSummary(res.skipped.filter((x) => x.kind === 'required')), /cannot be empty/);
+});
+
+test('option edits write task values from the normalised list', () => {
+  const p = planWith(3);
+  setTaskField(p.rows[0], 'status', 'Blocked', undefined, p);
+  setTaskField(p.rows[1], 'status', 'In progress', undefined, p);
+  const items = getOptionList(p, 'status');
+  items.find((i) => i.from === 'Blocked').name = '   On hold   ';
+  const ip = items.find((i) => i.from === 'In progress');
+  ip.deleted = true;
+  ip.moveTo = 'on HOLD';
+  assert.ok(!applyOptionList(p, 'status', items).error);
+  const names = statusNames(p);
+  assert.ok(names.includes('On hold'));
+  for (const r of p.rows) assert.ok(names.includes(r.status), r.status);
+  assert.equal(p.rows[0].status, 'On hold');
+  assert.equal(p.rows[1].status, 'On hold');
+});
+
+const ver = (n, data = 'x', enc = 'json') => ({ n, savedAt: new Date(Date.UTC(2026, 0, 1, 0, n)).toISOString(), author: '', changes: [], snapshot: { enc, data } });
+
+test('normHistory / mergeHistories enforce the version and byte caps and drop bad snapshots', () => {
+  const many = Array.from({ length: MAX_VERSIONS + 30 }, (_, i) => ver(i + 1));
+  const h = normHistory(many);
+  assert.equal(h.length, MAX_VERSIONS);
+  assert.equal(h[h.length - 1].n, MAX_VERSIONS + 30);
+  const big = 'y'.repeat(1024 * 1024);
+  const sized = normHistory(Array.from({ length: 8 }, (_, i) => ver(i + 1, JSON.stringify(big + i))));
+  assert.ok(historyBytes(sized) <= MAX_HISTORY_BYTES && sized.length === 4, String(sized.length));
+  assert.equal(sized[sized.length - 1].n, 8);
+  const bad = normHistory([ver(1, 'z'.repeat(MAX_HISTORY_BYTES + 1)), ver(2, 'not base64!', 'gzip-base64'), ver(3, 'abc', 'gzip-base64'), ver(4, '{}', 'weird'), ver(5, ''), ver(6, 'ok'), ver(6, 'ok')]);
+  assert.deepEqual(bad.map((v) => v.n), [6]);
+  const merged = mergeHistories(many.slice(0, 40), many.slice(40));
+  assert.equal(merged.length, MAX_VERSIONS);
+  assert.equal(merged[0].n, 31);
+});
+
+test('decodeSnapshot aborts past the size cap with a friendly error', async () => {
+  const snap = await encodeSnapshot({ id: 'p', rows: [], pad: ' '.repeat(3 * 1024 * 1024) }, { compress: true });
+  assert.equal(snap.enc, 'gzip-base64');
+  assert.ok(snap.data.length < 100000);
+  await assert.rejects(decodeSnapshot(snap, { maxBytes: 1024 * 1024 }), /too large to open/);
+  assert.equal((await decodeSnapshot(snap)).id, 'p');
+  await assert.rejects(decodeSnapshot({ enc: 'json', data: '{"a":"' + 'x'.repeat(2000) + '"}' }, { maxBytes: 1000 }), /too large/);
+  await assert.rejects(decodeSnapshot({ enc: 'gzip-base64', data: 'AAAA' }), /damaged/);
+});
+
+test('HTML parser stays linear on 800 KB of hostile input', () => {
+  const size = 800 * 1024;
+  const fill = (unit) => unit.repeat(Math.ceil(size / unit.length)).slice(0, size);
+  const inputs = ['<a "', "<a x='", '<a x="', '<', '</x>', '<b>', '<b><i></b>', '<!--', '<script>', '<a =" >', '&lt;p&gt;<'].map(fill);
+  for (const s of inputs) {
+    const t0 = performance.now();
+    parseHTML(s);
+    sanitizeHtml(s);
+    const ms = performance.now() - t0;
+    assert.ok(ms < 1000, `${JSON.stringify(s.slice(0, 8))}: ${ms.toFixed(0)} ms`);
+  }
+  const d = parseHTML('<a title="x>y" href=\'q\'>z</a> <a "> w');
+  assert.equal(d.body.childNodes[0].getAttribute('title'), 'x>y');
+  assert.equal(d.body.textContent, 'z  w');
+  assert.equal(parseHTML('a <b "c').body.textContent, 'a <b "c');
 });

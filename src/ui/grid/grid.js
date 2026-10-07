@@ -296,7 +296,7 @@ export function createGrid(app, root) {
     if (!g) return;
     const cells = [];
     for (let r = g.r1; r <= g.r2; r++) for (let c = g.c1; c <= g.c2; c++) cells.push({ r, c, value: '' });
-    applyCells('Clear cells', cells, null, ['section', 'rollup', 'readonly']);
+    applyCells('Clear cells', cells, null, ['section', 'rollup', 'readonly', 'required']);
   }
   function fromCells(targets) {
     return targets.map((x) => ({ r: x.r, c: x.c, value: cellText(store.plan, store.d.tree, store.d.visible[x.from.r], cols[x.from.c].key) }));
@@ -631,8 +631,13 @@ export function createGrid(app, root) {
   document.addEventListener('paste', (e) => {
     if (!gridFocused()) return;
     e.preventDefault();
-    const text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
-    pasteText(text || clip);
+    // The grid's own copy is only a fallback for browsers without clipboardData;
+    // a system clipboard holding non-text (an image, files) pastes nothing.
+    if (!e.clipboardData) return pasteText(clip);
+    const text = e.clipboardData.getData('text/plain');
+    if (text) pasteText(text);
+    else app.toast('The clipboard holds no text to paste.', 'info', 3000);
+    return undefined;
   });
 
   // ---- mouse ---------------------------------------------------------------

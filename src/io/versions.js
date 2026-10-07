@@ -6,6 +6,8 @@ import { computeTree, isTask } from '../model/tree.js';
 
 export const MAX_VERSIONS = 50;
 export const MAX_HISTORY_BYTES = 5 * 1024 * 1024;
+/** Largest decoded snapshot accepted (gzip can expand a small file a lot). */
+export const MAX_SNAPSHOT_BYTES = 50 * 1024 * 1024;
 const MAX_CHANGES = 14;
 
 // ---- snapshots -------------------------------------------------------------
@@ -40,36 +42,91 @@ export async function encodeSnapshot(plan, { compress = canCompress() } = {}) {
   return { enc: 'json', data: json };
 }
 
-/** Snapshot → plan object (untrusted: normalise before use). Throws when unreadable. */
-export async function decodeSnapshot(snap) {
-  if (!snap || typeof snap.data !== 'string') throw new Error('This version has no snapshot.');
-  if (snap.enc === 'json') return JSON.parse(snap.data);
-  if (snap.enc === 'gzip-base64') {
-    if (typeof globalThis.DecompressionStream !== 'function') throw new Error('This browser cannot read compressed versions.');
-    return JSON.parse(new TextDecoder().decode(await pipe(fromBase64(snap.data), new DecompressionStream('gzip'))));
+const tooBig = (max) => new Error(`This version is too large to open (over ${Math.round(max / 1048576)} MB).`);
+
+/** Stream-inflate gzip bytes; abort as soon as the output passes `max` bytes. */
+async function inflate(bytes, max) {
+  const reader = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip')).getReader();
+  const parts = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > max) {
+      reader.cancel().catch(() => {});
+      throw tooBig(max);
+    }
+    parts.push(value);
   }
-  throw new Error(`Unknown snapshot format “${String(snap.enc).slice(0, 20)}”.`);
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const p of parts) {
+    out.set(p, at);
+    at += p.length;
+  }
+  return out;
+}
+
+/** Snapshot → plan object (untrusted: normalise before use). Throws a readable error when unreadable or too large. */
+export async function decodeSnapshot(snap, { maxBytes = MAX_SNAPSHOT_BYTES } = {}) {
+  if (!snap || typeof snap.data !== 'string') throw new Error('This version has no snapshot.');
+  if (snap.enc !== 'json' && snap.enc !== 'gzip-base64') throw new Error(`Unknown snapshot format “${String(snap.enc).slice(0, 20)}”.`);
+  let json;
+  if (snap.enc === 'json') {
+    if (snap.data.length > maxBytes) throw tooBig(maxBytes);
+    json = snap.data;
+  } else {
+    if (typeof globalThis.DecompressionStream !== 'function') throw new Error('This browser cannot read compressed versions.');
+    let bytes;
+    try {
+      bytes = await inflate(fromBase64(snap.data), maxBytes);
+    } catch (e) {
+      if (e && /too large/.test(e.message)) throw e;
+      throw new Error('This version’s snapshot is damaged.');
+    }
+    json = new TextDecoder().decode(bytes);
+  }
+  try {
+    return JSON.parse(json);
+  } catch (e) {
+    throw new Error('This version’s snapshot is damaged.');
+  }
 }
 
 // ---- the history list ------------------------------------------------------
 
 const str = (v, max) => (v == null ? '' : String(v).slice(0, max));
 
-/** Validate a history list from a file; oldest first. */
-export function normHistory(list) {
+const B64 = /^[A-Za-z0-9+/]*={0,2}$/;
+/** A snapshot is kept only when its format is known and it fits the history budget on its own. */
+function validSnapshot(snap) {
+  if (!snap || typeof snap.data !== 'string' || !snap.data || snap.data.length > MAX_HISTORY_BYTES) return false;
+  if (snap.enc === 'json') return true;
+  return snap.enc === 'gzip-base64' && snap.data.length % 4 === 0 && B64.test(snap.data);
+}
+
+/** Validate a history list from a file (untrusted); oldest first, capped like appendVersion. */
+export function normHistory(list, opts) {
   if (!Array.isArray(list)) return [];
   const out = [];
-  for (const v of list) {
-    if (!v || typeof v !== 'object' || !Number.isInteger(v.n) || v.n < 1 || !v.snapshot || typeof v.snapshot.data !== 'string') continue;
-    out.push({
+  const seen = new Set();
+  for (const v of list.slice(-MAX_VERSIONS * 4)) {
+    if (!v || typeof v !== 'object' || !Number.isInteger(v.n) || v.n < 1 || !validSnapshot(v.snapshot)) continue;
+    const e = {
       n: v.n,
       savedAt: str(v.savedAt, 40),
       author: str(v.author, 80),
       changes: Array.isArray(v.changes) ? v.changes.slice(0, MAX_CHANGES + 1).map((c) => str(c, 300)) : [],
-      snapshot: { enc: str(v.snapshot.enc, 20), data: v.snapshot.data },
-    });
+      snapshot: { enc: v.snapshot.enc, data: v.snapshot.data },
+    };
+    const key = `${e.n}@${e.savedAt}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(e);
   }
-  return out.sort((a, b) => a.n - b.n || (Date.parse(a.savedAt) || 0) - (Date.parse(b.savedAt) || 0));
+  out.sort((a, b) => a.n - b.n || (Date.parse(a.savedAt) || 0) - (Date.parse(b.savedAt) || 0));
+  return capHistory(out, opts);
 }
 
 const utf8Len = (s) => (typeof TextEncoder === 'function' ? new TextEncoder().encode(s).length : s.length);
@@ -77,12 +134,12 @@ export const historyBytes = (list) => utf8Len(JSON.stringify(list || []));
 export const nextVersionNumber = (list) => (list && list.length ? Math.max(...list.map((v) => v.n)) : 0) + 1;
 
 /**
- * Append a version and drop the oldest until at most `maxVersions` remain and
- * the list fits `maxBytes` (the newest version is always kept).
+ * Drop the oldest versions until at most `maxVersions` remain and the list
+ * fits `maxBytes` (the newest version is always kept).
  */
-export function appendVersion(list, entry, { maxVersions = MAX_VERSIONS, maxBytes = MAX_HISTORY_BYTES } = {}) {
-  const out = [...(list || []), entry];
-  while (out.length > maxVersions) out.shift();
+export function capHistory(list, { maxVersions = MAX_VERSIONS, maxBytes = MAX_HISTORY_BYTES } = {}) {
+  const out = [...(list || [])];
+  if (out.length > maxVersions) out.splice(0, out.length - maxVersions);
   if (out.length > 1) {
     const sizes = out.map((v) => utf8Len(JSON.stringify(v)) + 1);
     let total = sizes.reduce((a, b) => a + b, 1);
@@ -94,11 +151,14 @@ export function appendVersion(list, entry, { maxVersions = MAX_VERSIONS, maxByte
   return out;
 }
 
-/** Union of two histories of the same file (e.g. this tab's and the one on disk). */
-export function mergeHistories(a, b) {
+/** Append a version, then cap (see capHistory). */
+export const appendVersion = (list, entry, opts) => capHistory([...(list || []), entry], opts);
+
+/** Union of two histories of the same file (e.g. this tab's and the one on disk), capped. */
+export function mergeHistories(a, b, opts) {
   const m = new Map();
   for (const v of [...(a || []), ...(b || [])]) m.set(`${v.n}@${v.savedAt}`, v);
-  return [...m.values()].sort((x, y) => (Date.parse(x.savedAt) || 0) - (Date.parse(y.savedAt) || 0) || x.n - y.n);
+  return capHistory([...m.values()].sort((x, y) => (Date.parse(x.savedAt) || 0) - (Date.parse(y.savedAt) || 0) || x.n - y.n), opts);
 }
 
 /** Build the next version entry for `plan` (prev = the last saved plan or null). */
