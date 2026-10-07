@@ -12,7 +12,9 @@ Single-file HTML project planner: nested tasks, sections, task cards, Gantt with
 - **Gantt:** day / week / month / quarter zoom, fit project, today line, weekend shading. Bars can be dragged and resized, and dependencies of all four types take lag or lead (`4FS+2d`, `7SS-1d`).
 - **Scheduling:** auto-schedule or conflict highlighting, cycle refusal, critical path, baseline with variance.
 - **Views:** Board (kanban by status) and Logs (risks, decisions, open questions).
-- **Data:** autosave per plan in `localStorage`, multiple plans, JSON import/export (picker or drag and drop), paste import from Excel / Planner / Smartsheet, CSV export, **Save to file** (Ctrl/Cmd+S: downloads this HTML with the current plan embedded, opening editable; newer edits saved in the browser win on reopen, with a banner to switch back to the file version), and a standalone copy that opens read-only in presenter mode.
+- **Save in place:** **Save** (header button or Ctrl/Cmd+S) writes the plan into the .html file itself. In Edge / Chrome / Brave the first Save asks where to save (suggesting the current file name) and later Saves overwrite that file directly; the file handle is remembered per plan and opened file in IndexedDB, so Save keeps working after a reload while the browser still grants access. If the file was changed by someone else since you opened it, Save asks before overwriting. **Save as…** (Shift+Ctrl/Cmd+S) always asks. Safari and Firefox (no File System Access API) download `<plan name>.html` instead: replace the original file with it. The header shows *Unsaved changes* / *Saved to file 14:32*, and closing the tab with unsaved edits asks first.
+- **Sharing:** put the .html on OneDrive / Teams / SharePoint; anyone opens it in Edge or Chrome, edits and presses Save. Every saved copy opens editable (including v1 “standalone copies”); **Export read-only presenter copy** is the only way to make a read-only file.
+- **Data:** autosave per plan in `localStorage` as a safety net, multiple plans, JSON import/export (picker or drag and drop), paste import from Excel / Planner / Smartsheet, CSV export. Newer edits saved in the browser win when a file is reopened, with a banner to switch back to the file version; Save then writes the version shown.
 - **Presenting and output:** presenter mode, landscape print layout, Gantt PNG export.
 - **Quality of life:** undo / redo with up to 200 steps (history capped at ~20 MB, unchanged rows shared between steps), search and filters, column show/hide and resize, light and dark themes. Press `?` in the app to see the keyboard shortcuts.
 
@@ -34,7 +36,7 @@ npm run check     # fails if dist/planboard.html is stale
 | --- | --- |
 | `src/schedule/` | Pure scheduling (no DOM): working-day calendar, link types and lag, auto-schedule, conflicts, cycles, roll-up, critical path |
 | `src/model/` | Plan schema and normalisation, flat-row tree operations, edit helpers, stats, sample plan |
-| `src/io/` | Storage, paste (TSV/CSV) import, CSV export, standalone embedding |
+| `src/io/` | Storage, paste (TSV/CSV) import, CSV export, payload embedding, save-in-place (`filesave.js`: save-state machine, handle registry, conflict check, save flow) |
 | `src/util/` | HTML escaping, safe markdown subset |
 | `src/ui/` | App shell, `grid/`, `gantt/`, `card/`, `board/`, `logs/`, `dialogs/`, print |
 | `src/styles/` | CSS, concatenated in file-name order |

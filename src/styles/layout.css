@@ -9,6 +9,7 @@
 .plan-name { font-size: 17px; font-weight: 700; border-color: transparent; background: transparent; width: 26ch; padding: 2px 6px; }
 .plan-name:hover { border-color: var(--line); }
 .save-state { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.save-state.dirty { color: var(--warn); font-weight: 600; }
 .save-state.err { color: var(--danger); font-weight: 600; }
 .ro-badge { display: none; font-size: 11px; font-weight: 700; color: var(--warn); border: 1px solid currentColor; border-radius: 10px; padding: 0 8px; }
 .readonly .ro-badge { display: inline-block; }
@@ -30,6 +31,7 @@ button.chip:hover { background: var(--hover); }
 .tab:last-child { border-right: 0; }
 .tab[aria-selected="true"] { background: var(--accent); color: var(--accent-fg); font-weight: 600; }
 .unlock { display: none; }
+.readonly .save-btn { display: none; }
 .readonly .unlock { display: inline-flex; }
 .exit-present { display: none; }
 .presenter .exit-present { display: inline-flex; }

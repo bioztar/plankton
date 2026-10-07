@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="color-scheme" content="light dark">
-<meta name="generator" content="planboard 1.0.0">
+<meta name="generator" content="planboard 1.1.0">
 <title>Planboard</title>
 <style>/* ---- base.css */
 :root {
@@ -182,6 +182,8 @@ dialog::backdrop { background: rgba(10, 15, 25, 0.45); }
 .kbd-table { border-collapse: collapse; width: 100%; }
 .kbd-table td { padding: 4px 6px; border-bottom: 1px solid var(--grid); vertical-align: top; }
 .kbd-table td:first-child { white-space: nowrap; width: 42%; }
+.help-h { font-size: 14px; margin: 16px 0 6px; }
+.help-share { margin: 0 0 8px; padding-left: 20px; font-size: 13px; line-height: 1.5; }
 
 /* ---- gantt.css */
 .gt-scroll { height: 100%; overflow: auto; position: relative; background: var(--bg); }
@@ -270,6 +272,7 @@ dialog::backdrop { background: rgba(10, 15, 25, 0.45); }
 .plan-name { font-size: 17px; font-weight: 700; border-color: transparent; background: transparent; width: 26ch; padding: 2px 6px; }
 .plan-name:hover { border-color: var(--line); }
 .save-state { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.save-state.dirty { color: var(--warn); font-weight: 600; }
 .save-state.err { color: var(--danger); font-weight: 600; }
 .ro-badge { display: none; font-size: 11px; font-weight: 700; color: var(--warn); border: 1px solid currentColor; border-radius: 10px; padding: 0 8px; }
 .readonly .ro-badge { display: inline-block; }
@@ -291,6 +294,7 @@ button.chip:hover { background: var(--hover); }
 .tab:last-child { border-right: 0; }
 .tab[aria-selected="true"] { background: var(--accent); color: var(--accent-fg); font-weight: 600; }
 .unlock { display: none; }
+.readonly .save-btn { display: none; }
 .readonly .unlock { display: inline-flex; }
 .exit-present { display: none; }
 .presenter .exit-present { display: inline-flex; }
@@ -2063,6 +2067,8 @@ function createStore({ plan, storage, readOnly = false, embedded = false, presen
     }
     s.lastLabel = label;
     s.persist();
+    // Undoable commits are content edits; view tweaks (zoom, collapse, widths) are not.
+    if (undo) s.emit('edit', label);
     s.emit('change', { label, moved: s.d.moved });
     return true;
   };
@@ -2073,6 +2079,7 @@ function createStore({ plan, storage, readOnly = false, embedded = false, presen
     s.plan = normalizePlan(H.restore(from.pop()));
     s.derive(false);
     s.persist();
+    s.emit('edit');
     s.emit('change');
     return true;
   };
@@ -2611,7 +2618,9 @@ return { escapeHtml, jsonForScript };
 // ---- io/standalone.js
 const __io_standalone = (() => {
 const { jsonForScript } = __util_escape;
-// "Export standalone copy": the app's own HTML with a plan embedded. Pure string ops.
+const { serializePlan } = __model_plan;
+// The app's own HTML with a plan embedded (Save / read-only presenter copy). Pure string ops.
+
 
 
 const DATA_RE = /(<script type="application\/json" id="pb-data">)([\s\S]*?)(<\/script>)/;
@@ -2631,23 +2640,313 @@ function extractPayload(html) {
   }
 }
 
+/**
+ * The JSON embedded in a saved file. Saves are editable; only `presenter: true`
+ * (Export read-only presenter copy) produces a read-only file, marked mode:'presenter'.
+ */
+function buildPayload(plan, { presenter = false, at = new Date().toISOString() } = {}) {
+  const data = JSON.parse(serializePlan(plan, false));
+  return presenter
+    ? { app: 'planboard', mode: 'presenter', readOnly: true, presenter: true, exportedAt: at, plan: data }
+    : { app: 'planboard', mode: 'edit', readOnly: false, presenter: false, savedAt: at, plan: data };
+}
+
+/** Only explicit presenter copies open read-only; v1 "standalone copies" (no mode) open editable. */
+function isPresenterCopy(payload) {
+  return !!payload && payload.mode === 'presenter' && payload.readOnly !== false;
+}
+
+/** Identifies one written version of a file. */
+function payloadStamp(payload) {
+  return (payload && (payload.savedAt || payload.exportedAt)) || null;
+}
+
 const stampMs = (s) => Date.parse(s) || 0;
 
 /**
  * Decide what an HTML file with an embedded payload opens. `saved` is this
  * browser's stored plan with the same id (or null). Edits saved here that are
- * newer than the file win, opened editable; otherwise the file's plan opens with
- * the payload's flags (read-only + presenter unless they are explicitly false).
+ * newer than the file win, opened editable; otherwise the file's plan opens,
+ * editable unless the file is a read-only presenter copy.
  */
 function resolveBoot(payload, saved) {
   if (!payload || !payload.plan) return null;
-  const file = { plan: payload.plan, readOnly: payload.readOnly !== false, presenter: payload.presenter !== false };
+  const ro = isPresenterCopy(payload);
+  const file = { plan: payload.plan, readOnly: ro, presenter: ro && payload.presenter !== false, stamp: payloadStamp(payload) };
   if (saved && saved.id === file.plan.id && stampMs(saved.updatedAt) > stampMs(file.plan.updatedAt)) {
     return { source: 'saved', plan: saved, readOnly: false, presenter: false, file };
   }
   return { source: 'file', plan: file.plan, readOnly: file.readOnly, presenter: file.presenter, file };
 }
-return { embedPayload, extractPayload, resolveBoot };
+return { embedPayload, extractPayload, buildPayload, isPresenterCopy, payloadStamp, resolveBoot };
+})();
+
+// ---- io/filesave.js
+const __io_filesave = (() => {
+const { extractPayload, payloadStamp } = __io_standalone;
+// Save the plan back into its own .html file. Pure pieces (save-state machine,
+// handle keying, on-disk conflict check) plus a save flow whose browser APIs
+// (showSaveFilePicker, download, confirm, handle registry) are injected.
+
+
+// ---- save state: clean -> dirty -> saving -> saved | failed ----------------
+
+/** `dirty`: the plan shown differs from the file it came from (e.g. newer browser edits). */
+function initialSaveState(dirty = false) {
+  return { status: dirty ? 'dirty' : 'clean', rev: dirty ? 1 : 0, savedRev: 0, savingRev: null, savedAt: null, target: null, error: null };
+}
+
+function saveReducer(s, ev) {
+  switch (ev.type) {
+    case 'edit':
+      return { ...s, rev: s.rev + 1, status: s.status === 'saving' ? 'saving' : 'dirty' };
+    case 'start':
+      return { ...s, status: 'saving', savingRev: s.rev, error: null };
+    case 'success': {
+      const savedRev = s.savingRev == null ? s.rev : s.savingRev;
+      return { ...s, savedRev, savingRev: null, savedAt: ev.at, target: ev.target || 'file', status: savedRev === s.rev ? 'saved' : 'dirty' };
+    }
+    case 'fail':
+      return { ...s, savingRev: null, status: 'failed', error: ev.error || 'Save failed' };
+    case 'cancel':
+      return { ...s, savingRev: null, status: s.rev !== s.savedRev ? 'dirty' : s.savedAt ? 'saved' : 'clean' };
+    case 'reset':
+      return initialSaveState(!!ev.dirty);
+    default:
+      return s;
+  }
+}
+
+/** Edits not yet written to a file (drives the beforeunload prompt). */
+const hasUnsaved = (s) => s.rev !== s.savedRev;
+
+const hhmm = (t) => {
+  const d = new Date(t);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
+function saveStatusText(s, fmtTime = hhmm) {
+  switch (s.status) {
+    case 'dirty':
+      return 'Unsaved changes';
+    case 'saving':
+      return 'Saving…';
+    case 'saved':
+      return `${s.target === 'download' ? 'Downloaded' : 'Saved to file'} ${fmtTime(s.savedAt)}`;
+    case 'failed':
+      return 'Save failed';
+    default:
+      return 'No unsaved changes';
+  }
+}
+
+// ---- handle persistence ----------------------------------------------------
+
+/** The page address without query or hash: one remembered handle per plan per opened file. */
+function pageKey(href) {
+  return String(href || '').replace(/[?#].*$/, '');
+}
+
+function handleKey(planId, href) {
+  return `${planId}@${pageKey(href)}`;
+}
+
+/** File name to suggest on first Save: the opened file's own name, else the fallback. */
+function suggestedFileName(href, fallback) {
+  try {
+    const seg = decodeURIComponent(new URL(href).pathname.split('/').pop() || '');
+    if (/\.html?$/i.test(seg)) return seg;
+  } catch (e) {
+    /* not a URL */
+  }
+  return fallback;
+}
+
+const within = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+
+/**
+ * kv: { get(k), set(k, v), del(k) } returning promises (IndexedDB in the browser).
+ * Never throws; a store that hangs (e.g. blocked IndexedDB) times out after `ms`.
+ */
+function createHandleRegistry(kv, ms = 3000) {
+  return {
+    async get(planId, href) {
+      try {
+        const r = await within(kv.get(handleKey(planId, href)), ms);
+        return r && r.handle ? r : null;
+      } catch (e) {
+        return null;
+      }
+    },
+    async put(planId, href, handle, stamp) {
+      try {
+        await within(kv.set(handleKey(planId, href), { planId, page: pageKey(href), handle, name: handle.name || '', stamp: stamp || null }), ms);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    },
+    async forget(planId, href) {
+      try {
+        await within(kv.del(handleKey(planId, href)), ms);
+      } catch (e) {
+        /* ignore */
+      }
+    },
+  };
+}
+
+// ---- conflict check --------------------------------------------------------
+
+/**
+ * Before overwriting a remembered file: does it still hold a version this tab has
+ * seen? `known` = stamps of the payload this page opened, the remembered save and
+ * saves made from this tab. Returns null (safe) or { kind: 'changed'|'other', ... }.
+ */
+function diskConflict(diskText, planId, known) {
+  if (!diskText || !diskText.trim()) return null;
+  const p = extractPayload(diskText);
+  if (!p || !p.plan) return { kind: 'other', name: '' };
+  if (p.plan.id !== planId) return { kind: 'other', name: p.plan.name || '' };
+  const stamp = payloadStamp(p);
+  if (stamp && known.has(stamp)) return null;
+  return { kind: 'changed', name: p.plan.name || '', stamp };
+}
+
+// ---- save flow -------------------------------------------------------------
+
+async function ensurePermission(h) {
+  const opts = { mode: 'readwrite' };
+  try {
+    if (typeof h.queryPermission !== 'function') return 'granted';
+    let p = await h.queryPermission(opts);
+    if (p === 'prompt' && typeof h.requestPermission === 'function') p = await h.requestPermission(opts);
+    return p;
+  } catch (e) {
+    return 'denied';
+  }
+}
+
+const PICKER_TYPES = [{ description: 'Planboard plan (HTML)', accept: { 'text/html': ['.html', '.htm'] } }];
+
+/**
+ * env: { showSaveFilePicker (null when unsupported), registry, href, download(name, text), confirm(conflict) -> 'overwrite'|'saveas'|'cancel' }
+ * save() resolves { status: 'saved'|'downloaded'|'cancelled'|'failed', name?, reason?, error? }.
+ */
+function createFileSaver(env) {
+  const supported = typeof env.showSaveFilePicker === 'function';
+  let planId = null;
+  let handle = null;
+  let known = new Set();
+  let ready = Promise.resolve();
+
+  const fallback = (o, reason) => {
+    env.download(o.downloadName, o.html);
+    return { status: 'downloaded', name: o.downloadName, reason };
+  };
+
+  return {
+    supported,
+    get fileName() {
+      return handle ? handle.name : '';
+    },
+    /** Point at a plan: loads its remembered handle. `openedStamp` = stamp of the file payload shown. */
+    bind(id, openedStamp) {
+      planId = id;
+      handle = null;
+      known = new Set(openedStamp ? [openedStamp] : []);
+      if (!supported) return ready;
+      ready = env.registry.get(id, env.href).then((rec) => {
+        if (planId !== id || !rec) return;
+        handle = rec.handle;
+        if (rec.stamp) known.add(rec.stamp);
+      });
+      return ready;
+    },
+    /** o: { planId, html, stamp, saveAs, suggestedName, downloadName } */
+    async save(o) {
+      if (!supported) return fallback(o, 'unsupported');
+      await ready;
+      let h = o.saveAs || o.planId !== planId ? null : handle;
+      if (h) {
+        if ((await ensurePermission(h)) !== 'granted') return fallback(o, 'denied');
+        let text = null;
+        try {
+          text = await (await h.getFile()).text();
+        } catch (e) {
+          if (e && e.name === 'NotFoundError') {
+            h = null;
+            await env.registry.forget(o.planId, env.href);
+          }
+        }
+        const c = h && text != null ? diskConflict(text, o.planId, known) : null;
+        if (c) {
+          const choice = await env.confirm({ ...c, fileName: h.name });
+          if (choice === 'saveas') h = null;
+          else if (choice !== 'overwrite') return { status: 'cancelled' };
+        }
+      }
+      if (!h) {
+        try {
+          h = await env.showSaveFilePicker({ suggestedName: o.suggestedName, types: PICKER_TYPES, id: 'planboard' });
+        } catch (e) {
+          if (e && e.name === 'AbortError') return { status: 'cancelled' };
+          return fallback(o, 'picker');
+        }
+      }
+      try {
+        const w = await h.createWritable();
+        await w.write(o.html);
+        await w.close();
+      } catch (e) {
+        if (e && e.name === 'NotAllowedError') return fallback(o, 'denied');
+        return { status: 'failed', name: h.name, error: (e && e.message) || String(e) };
+      }
+      if (o.planId === planId) {
+        handle = h;
+        known.add(o.stamp);
+      }
+      await env.registry.put(o.planId, env.href, h, o.stamp);
+      return { status: 'saved', name: h.name };
+    },
+  };
+}
+return { initialSaveState, saveReducer, hasUnsaved, saveStatusText, pageKey, handleKey, suggestedFileName, createHandleRegistry, diskConflict, createFileSaver };
+})();
+
+// ---- io/idb.js
+const __io_idb = (() => {
+
+// Minimal promise wrapper over one IndexedDB object store (key -> structured-cloneable value).
+function idbKV(dbName = 'planboard', storeName = 'kv') {
+  let dbp = null;
+  const open = () =>
+    dbp ||
+    (dbp = new Promise((resolve, reject) => {
+      if (typeof indexedDB === 'undefined') throw new Error('IndexedDB unavailable');
+      const r = indexedDB.open(dbName, 1);
+      r.onupgradeneeded = () => r.result.createObjectStore(storeName);
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    }));
+  const run = (mode, fn) =>
+    open().then(
+      (db) =>
+        new Promise((resolve, reject) => {
+          const t = db.transaction(storeName, mode);
+          const req = fn(t.objectStore(storeName));
+          t.oncomplete = () => resolve(req.result);
+          t.onerror = () => reject(t.error);
+          t.onabort = () => reject(t.error);
+        })
+    );
+  return {
+    get: (k) => run('readonly', (s) => s.get(k)),
+    set: (k, v) => run('readwrite', (s) => s.put(v, k)),
+    del: (k) => run('readwrite', (s) => s.delete(k)),
+  };
+}
+return { idbKV };
 })();
 
 // ---- ui/gantt/scale.js
@@ -5414,7 +5713,9 @@ const { planStats } = __model_stats;
 const { today, isISODate, mondayOf, toISO } = __schedule_calendar;
 const { formatLag } = __schedule_links;
 const { toCSV } = __io_csv;
-const { embedPayload, extractPayload, resolveBoot } = __io_standalone;
+const { embedPayload, extractPayload, resolveBoot, buildPayload } = __io_standalone;
+const { createFileSaver, createHandleRegistry, initialSaveState, saveReducer, hasUnsaved, saveStatusText, suggestedFileName } = __io_filesave;
+const { idbKV } = __io_idb;
 const { escapeHtml: esc } = __util_escape;
 const { GANTT_CSS } = __ui_gantt_render;
 const { createGrid } = __ui_grid_grid;
@@ -5431,6 +5732,8 @@ const { columnState } = __ui_grid_columns;
 const { fmtDateLong, fmtStamp } = __ui_format;
 // App shell: layout, header, toolbar, menus, plan management, import/export,
 // global shortcuts. Views (grid, gantt, card, board, logs) live in their own modules.
+
+
 
 
 
@@ -5481,6 +5784,7 @@ function layoutHTML() {
   <button type="button" class="btn primary unlock" data-act="unlock">Unlock editing</button>
   <button type="button" class="btn" data-act="present" aria-pressed="false" title="Presenter mode: hides editing tools, larger text">Present</button>
   <button type="button" class="btn" data-act="theme" title="Light / dark theme (Auto follows the OS)">Theme</button>
+  <button type="button" class="btn save-btn" data-act="save" title="Save (${K}+S)">Save</button>
   <button type="button" class="btn" data-act="file" aria-haspopup="menu">File ▾</button>
   <button type="button" class="btn ic" data-act="help" aria-label="Keyboard shortcuts and help" title="Help (?)">?</button>
 </div>
@@ -5985,15 +6289,65 @@ function boot(sourceHtml) {
     return n ? ` ${n} circular or invalid link${n === 1 ? ' was' : 's were'} removed.` : '';
   }
 
-  // "Save to file": this HTML with the current plan embedded as an editable copy,
-  // so the plan travels inside the file itself.
-  function saveToFile() {
+  // ---- save into the .html file -------------------------------------------
+  // Chromium: write in place through a File System Access handle remembered per
+  // plan and page in IndexedDB. Elsewhere: download the updated file.
+  const pickerFn = typeof window.showSaveFilePicker === 'function' ? (o) => window.showSaveFilePicker(o) : null;
+  const saver = createFileSaver({
+    showSaveFilePicker: pickerFn,
+    registry: createHandleRegistry(idbKV()),
+    href: location.href,
+    download: (name, html) => download(name, html, 'text/html;charset=utf-8'),
+    confirm: confirmOverwrite,
+  });
+  let fileState = initialSaveState(!!opened && opened.source === 'saved');
+  const fileStampFor = (id) => (opened && opened.file.plan.id === id ? opened.file.stamp : null);
+  saver.bind(store.plan.id, fileStampFor(store.plan.id));
+  const setFileState = (ev) => {
+    fileState = saveReducer(fileState, ev);
+    updateSaveState();
+  };
+  const SHARE_HINT = 'Replace the original file with the downloaded one to share your edits.';
+
+  async function confirmOverwrite(c) {
+    const body = c.kind === 'changed'
+      ? `<p>“${esc(c.fileName)}” has been changed since you opened it${c.stamp ? ` (saved ${esc(fmtStamp(c.stamp))})` : ''}, probably by someone else.</p><p>Overwriting replaces those changes with the version shown here.</p>`
+      : `<p>“${esc(c.fileName)}” no longer holds this plan${c.name ? ` (it now holds “${esc(c.name)}”)` : ''}.</p><p>Overwriting replaces its contents with this plan.</p>`;
+    const r = await modal({
+      title: 'File changed on disk',
+      body,
+      actions: [{ label: 'Cancel', value: 'cancel' }, { label: 'Save as…', value: 'saveas' }, { label: 'Overwrite', value: 'overwrite', danger: true }],
+    });
+    return r.value;
+  }
+
+  async function saveToFile(saveAs = false) {
     if (store.readOnly) return store.emit('readonly');
+    if (fileState.status === 'saving') return undefined;
     store.flush();
-    const payload = { app: 'planboard', readOnly: false, presenter: false, savedAt: new Date().toISOString(), plan: JSON.parse(serializePlan(store.plan, false)) };
+    const planId = store.plan.id;
+    const stamp = new Date().toISOString();
+    const html = embedPayload(sourceHtml, buildPayload(store.plan, { at: stamp }));
     const name = safeFilename(store.plan.name, 'html');
-    download(name, embedPayload(sourceHtml, payload), 'text/html;charset=utf-8');
-    toast(`Saved “${name}”. Opening that file restores this plan, ready to edit.`, 'info', 6000);
+    setFileState({ type: 'start' });
+    let r;
+    try {
+      r = await saver.save({ planId, html, stamp, saveAs, suggestedName: suggestedFileName(location.href, name), downloadName: name });
+    } catch (e) {
+      r = { status: 'failed', error: (e && e.message) || String(e) };
+    }
+    if (store.plan.id !== planId) return undefined;
+    if (r.status === 'saved') {
+      setFileState({ type: 'success', at: Date.now(), target: 'file' });
+      toast(`Saved to “${r.name}”.`, 'info', 2500);
+    } else if (r.status === 'downloaded') {
+      setFileState({ type: 'success', at: Date.now(), target: 'download' });
+      toast(r.reason === 'denied' ? `No permission to write the file, so “${r.name}” was downloaded. ${SHARE_HINT}` : SHARE_HINT, 'info', 8000);
+    } else if (r.status === 'cancelled') setFileState({ type: 'cancel' });
+    else {
+      setFileState({ type: 'fail', error: r.error });
+      toast(`Could not save${r.name ? ` “${r.name}”` : ''}: ${r.error}. Try File → Save as…`, 'error', 8000);
+    }
     return undefined;
   }
 
@@ -6019,10 +6373,10 @@ function boot(sourceHtml) {
     toast(f.readOnly ? 'Showing the file version (read-only). Your saved edits are still in this browser.' : 'Showing the file version.', 'info', 5000);
   }
 
-  function exportStandalone() {
-    const payload = { app: 'planboard', readOnly: true, presenter: true, exportedAt: new Date().toISOString(), plan: JSON.parse(serializePlan(store.plan, false)) };
-    download(safeFilename(store.plan.name, 'html'), embedPayload(sourceHtml, payload), 'text/html;charset=utf-8');
-    toast('Standalone copy downloaded. It opens read-only in presenter mode; “Unlock editing” makes it editable.', 'info', 6000);
+  function exportPresenterCopy() {
+    store.flush();
+    download(safeFilename(`${store.plan.name} (read-only)`, 'html'), embedPayload(sourceHtml, buildPayload(store.plan, { presenter: true })), 'text/html;charset=utf-8');
+    toast('Read-only presenter copy downloaded. It opens read-only; “Unlock editing” in it makes an editable copy in that browser.', 'info', 6000);
   }
   function exportPNG() {
     const go = () => exportGanttPNG(app).then(() => toast('Gantt PNG downloaded.')).catch((e) => toast(e.message, 'error'));
@@ -6056,11 +6410,11 @@ function boot(sourceHtml) {
       );
     }
     items.push({ heading: 'Export' });
-    if (!ro) items.push({ label: 'Save to file (.html)', hint: `${K}+S`, action: saveToFile });
+    if (!ro) items.push({ label: 'Save', hint: `${K}+S`, action: () => saveToFile(false) }, { label: 'Save as…', hint: `Shift+${K}+S`, action: () => saveToFile(true) });
     items.push(
       { label: 'Export JSON', action: exportJSON },
       { label: 'Export CSV', action: exportCSV },
-      { label: 'Export standalone copy (.html)', hint: 'email it', action: exportStandalone },
+      { label: 'Export read-only presenter copy (.html)', action: exportPresenterCopy },
       { label: 'Export Gantt as PNG', action: exportPNG },
       { label: 'Print…', hint: `${K}+P`, action: printPlan },
       { sep: true }
@@ -6221,7 +6575,8 @@ function boot(sourceHtml) {
       ['Alt+← / Alt+→ or Space', 'Collapse / expand a summary task or section'],
       [`${K}+Z / Shift+${K}+Z`, 'Undo / redo (also Ctrl+Y)'],
       [`${K}+F`, 'Search'],
-      [`${K}+S`, 'Save to file: download this HTML with the current plan embedded (opens editable)'],
+      [`${K}+S`, 'Save the plan into this .html file (Edge / Chrome write it in place; other browsers download an updated copy)'],
+      [`Shift+${K}+S`, 'Save as: write to a new file'],
       ['Gantt', 'Drag a bar to move it, drag its right edge to change the finish. Drag the small circle at a bar’s start or finish onto another bar to link them (drop on the left half → successor start, right half → successor finish). Click an arrow to edit or delete it; double-click a bar to open the card.'],
       ['Predecessors', 'Type outline numbers or #IDs with optional type and lag: 3, 1.2FS+2d, #7SS-1d, 4FF+1d, 5SF'],
       ['Board', 'Drag cards between columns; Shift+←/→ moves the focused card'],
@@ -6230,7 +6585,7 @@ function boot(sourceHtml) {
     modal({
       title: 'Keyboard shortcuts & tips',
       wide: true,
-      body: `<table class="kbd-table">${rows.map(([k, v]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(v)}</td></tr>`).join('')}</table><p class="hint">Everything is stored in this browser (localStorage) per plan. Use File → Save to file to keep the plan inside an .html file, Export JSON for backups, or Export standalone copy to share a read-only version.</p>`,
+      body: `<table class="kbd-table">${rows.map(([k, v]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(v)}</td></tr>`).join('')}</table><h3 class="help-h">How to share</h3><ol class="help-share"><li>Put this .html file on OneDrive, Teams or SharePoint (or any shared folder).</li><li>Open it in Edge or Chrome, for example from the synced OneDrive folder.</li><li>Edit, then press <b>Save</b> (${esc(K)}+S). The first time, pick the original file to overwrite it; after that Save writes straight to it.</li><li>In Safari or Firefox, Save downloads an updated copy: replace the original file with it.</li></ol><p class="hint">Edits are also autosaved in this browser (localStorage) as a safety net. Export JSON for backups; File → Export read-only presenter copy makes a version others cannot edit.</p>`,
       actions: [{ label: 'Close', value: 'cancel', primary: true }],
     });
   }
@@ -6238,6 +6593,7 @@ function boot(sourceHtml) {
   // ---- header & toolbar wiring ---------------------------------------------
   const ACTS = {
     'use-file': useFileVersion,
+    save: () => saveToFile(false),
     'banner-close': hideBanner,
     'add-task': addTask,
     'add-section': () => addSection(),
@@ -6364,18 +6720,27 @@ function boot(sourceHtml) {
 
   function updateSaveState() {
     const el = q('.save-state');
-    let text = 'Saved in this browser';
-    let err = false;
-    if (store.readOnly) text = store.embedded ? 'Shared copy' : '';
-    else if (!persistent) {
-      text = 'Not saved: browser storage unavailable';
+    const btn = q('[data-act="save"]');
+    const unsaved = !store.readOnly && hasUnsaved(fileState);
+    btn.classList.toggle('primary', unsaved);
+    el.classList.toggle('dirty', unsaved);
+    if (store.readOnly) {
+      el.textContent = store.embedded ? 'Shared copy' : '';
+      el.classList.remove('err');
+      el.title = '';
+      return;
+    }
+    let text = saveStatusText(fileState);
+    let err = fileState.status === 'failed';
+    const browser = !persistent ? 'browser storage unavailable' : store.saveState === 'error' ? 'browser storage full' : '';
+    if (browser) {
+      text += ` · not autosaved (${browser})`;
       err = true;
-    } else if (store.saveState === 'error') {
-      text = 'Not saved: browser storage full';
-      err = true;
-    } else if (store.saveState === 'saving') text = 'Saving…';
+    }
     el.textContent = text;
     el.classList.toggle('err', err);
+    const target = saver.fileName ? `“${saver.fileName}”` : 'the .html file';
+    el.title = `${fileState.status === 'failed' ? `${fileState.error}. ` : ''}Edits are autosaved in this browser. ${saver.supported ? `Save (${K}+S) writes them into ${target}.` : `Save (${K}+S) downloads an updated copy of the file.`}`;
   }
 
   function renderHeader() {
@@ -6445,7 +6810,11 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
       if (data && data.moved && data.moved.size) toast(`Auto-schedule moved ${data.moved.size} task${data.moved.size === 1 ? '' : 's'}.`, 'info', 2500);
     } else if (kind === 'error') toast(data, 'error', 6000);
     else if (kind === 'warn') toast(data, 'warn', 6000);
-    else if (kind === 'readonly') toast('This is a read-only copy. Click “Unlock editing” to make changes.');
+    else if (kind === 'edit') fileState = saveReducer(fileState, { type: 'edit' });
+    else if (kind === 'load') {
+      fileState = initialSaveState(false);
+      saver.bind(store.plan.id, fileStampFor(store.plan.id)).then(updateSaveState);
+    } else if (kind === 'readonly') toast('This is a read-only copy. Click “Unlock editing” to make changes.');
     else if (kind === 'saved') updateSaveState();
   });
 
@@ -6464,7 +6833,8 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
     } else if (mod(e) && !e.altKey && k === 's') {
       e.preventDefault();
       if (isTyping(e)) e.target.blur();
-      setTimeout(saveToFile);
+      const saveAs = e.shiftKey;
+      setTimeout(() => saveToFile(saveAs));
     } else if (mod(e) && !e.altKey && k === 'f') {
       e.preventDefault();
       search.focus();
@@ -6502,7 +6872,13 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
     if (f) readFile(f);
   });
 
-  window.addEventListener('beforeunload', () => store.flush());
+  window.addEventListener('beforeunload', (e) => {
+    store.flush();
+    if (!store.readOnly && hasUnsaved(fileState)) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
   window.addEventListener('pagehide', () => store.flush());
   let resizeTimer = 0;
   window.addEventListener('resize', () => {
@@ -6526,7 +6902,7 @@ return { boot };
 const __main = (() => {
 const { boot } = __ui_app;
 // Entry point. The page's own HTML is captured before rendering so
-// "Export standalone copy" can re-emit this file with a plan embedded.
+// Save and "Export read-only presenter copy" can re-emit this file with a plan embedded.
 
 
 const SOURCE = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
