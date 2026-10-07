@@ -19,3 +19,4 @@
 .bc-prog span { display: block; height: 100%; background: var(--ok); }
 .bc-empty { margin: 8px; font-size: 12px; }
 .bc-desc { font-size: 12px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bcard.done { background: var(--done-row); }

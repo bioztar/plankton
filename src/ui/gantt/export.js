@@ -16,7 +16,7 @@ export function ganttSVG(app, { rowH = 26, nameW = 300 } = {}) {
   const s = store.plan.settings;
   const chart = renderGantt({
     rows: d.visible, tree: d.tree, range, ppd, rowH, header: true, indexOf: d.indexOf, sectionColor: d.sectionColor,
-    critical: d.critical, conflicts: d.conflictKeys, showBaseline: s.showBaseline, labelMode: s.labelMode,
+    critical: d.critical, done: d.done, conflicts: d.conflictKeys, showBaseline: s.showBaseline, labelMode: s.labelMode,
     todayDay: app.todayDay(), prefix: 'x',
   });
   const titleH = 34;

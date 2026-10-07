@@ -3,11 +3,13 @@ import { clampDuration, clampLag, MAX_DURATION, isISODate, parseISO, toISO, toda
 import { LINK_TYPES } from '../schedule/links.js';
 import { normalizeLevels } from './tree.js';
 import { sanitizeLinks } from '../schedule/engine.js';
-import { sanitizeHtml, MAX_DESC_HTML } from '../util/sanitize.js';
+import { cleanDescHtml } from '../util/sanitize.js';
 import { markdownToHtml } from '../util/markdown.js';
 import { normFields, normValues } from './fields.js';
+import { defaultOptions, normOptionLists, statusNames, priorityNames, matchOption, defaultStatus, defaultPriority, isComplete } from './options.js';
 
 export const SCHEMA_VERSION = 1;
+// Built-in defaults; a plan's own lists live in plan.options (see options.js).
 export const STATUSES = ['Not started', 'In progress', 'Blocked', 'Done'];
 export const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
 export const PLAN_STATUSES = ['On track', 'At risk', 'Off track', 'On hold', 'Complete'];
@@ -77,8 +79,8 @@ export function createTask(plan, fields = {}) {
     finish: toISO(finishFromDuration(s, duration)),
     duration,
     progress: 0,
-    status: 'Not started',
-    priority: 'Medium',
+    status: defaultStatus(plan),
+    priority: defaultPriority(plan),
     owner: '',
     workstream: '',
     tags: [],
@@ -123,6 +125,7 @@ export function createPlan(fields = {}) {
     status: 'On track',
     rows: [],
     fields: [],
+    options: defaultOptions(),
     nextId: 1,
     baselineSavedAt: null,
     logs: { risks: [], decisions: [], questions: [] },
@@ -137,7 +140,18 @@ const str = (v, max = 20000) => (v == null ? '' : String(v).slice(0, max));
 const pick = (v, list, dflt) => (list.includes(v) ? v : dflt);
 const COLOR_RE = /^#[0-9a-f]{6}$/i;
 
-function normTask(t, plan) {
+function desc(t, rep) {
+  const raw = String(t.descHtml);
+  const r = {};
+  const html = cleanDescHtml(raw, r);
+  if (rep) {
+    if (r.truncated) rep.truncated.push(+t.id);
+    if (r.repaired) rep.repaired.push(+t.id);
+  }
+  return html;
+}
+
+function normTask(t, plan, rep) {
   const milestone = !!t.milestone;
   let start = isISODate(t.start) ? t.start : plan.start;
   let finish = isISODate(t.finish) ? t.finish : null;
@@ -164,18 +178,19 @@ function normTask(t, plan) {
     t.baseline && isISODate(t.baseline.start) && isISODate(t.baseline.finish)
       ? { start: t.baseline.start, finish: t.baseline.finish }
       : null;
+  const status = matchOption(statusNames(plan), t.status) || defaultStatus(plan);
   return {
     id: +t.id,
     kind: 'task',
     level: Math.max(0, Math.floor(+t.level || 0)),
     name: str(t.name, 500),
-    descHtml: t.descHtml != null ? sanitizeHtml(str(t.descHtml, MAX_DESC_HTML * 2)) : t.desc ? markdownToHtml(str(t.desc)) : '',
+    descHtml: t.descHtml != null ? desc(t, rep) : t.desc ? markdownToHtml(str(t.desc)) : '',
     start,
     finish,
     duration,
-    progress: Math.max(0, Math.min(100, Math.round(+t.progress || 0))),
-    status: pick(t.status, STATUSES, 'Not started'),
-    priority: pick(t.priority, PRIORITIES, 'Medium'),
+    progress: isComplete(plan, status) ? 100 : Math.max(0, Math.min(100, Math.round(+t.progress || 0))),
+    status,
+    priority: matchOption(priorityNames(plan), t.priority) || defaultPriority(plan),
     owner: str(t.owner, 200),
     workstream: str(t.workstream, 200),
     tags: Array.isArray(t.tags) ? t.tags.map((x) => str(x, 60).trim()).filter(Boolean) : [],
@@ -218,8 +233,10 @@ function normLog(list, kind) {
 
 /**
  * Validate and fill defaults on a plan from untrusted JSON. Throws on non-plans.
- * Links that would form a cycle (or point at sections) are removed; pass a
- * `report` object to receive them as `report.droppedLinks`.
+ * Idempotent. Links that would form a cycle (or point at sections) are removed;
+ * pass a `report` object to receive them as `report.droppedLinks`, plus the ids
+ * of descriptions cut to the size limit (`truncatedDescs`) and of descriptions
+ * whose escaped-HTML layers were repaired (`repairedDescs`).
  */
 export function normalizePlan(input, report) {
   if (!input || typeof input !== 'object' || !Array.isArray(input.rows)) {
@@ -260,6 +277,8 @@ export function normalizePlan(input, report) {
     plan.settings.columnOrder = [...new Set(s.columnOrder.filter((k) => typeof k === 'string' && /^\w{1,30}$/.test(k)))].slice(0, 200);
   }
   plan.fields = normFields(input.fields);
+  plan.options = normOptionLists(input.options);
+  const rep = { truncated: [], repaired: [] };
   const seen = new Set();
   let maxId = 0;
   plan.rows = [];
@@ -267,7 +286,7 @@ export function normalizePlan(input, report) {
     if (!r || typeof r !== 'object' || !Number.isInteger(+r.id) || +r.id <= 0 || seen.has(+r.id)) continue;
     seen.add(+r.id);
     maxId = Math.max(maxId, +r.id);
-    plan.rows.push(r.kind === 'section' ? normSection(r) : normTask(r, plan));
+    plan.rows.push(r.kind === 'section' ? normSection(r) : normTask(r, plan, rep));
   }
   normalizeLevels(plan.rows);
   for (const r of plan.rows) if (r.kind !== 'section') r.preds = r.preds.filter((p) => seen.has(p.id) && p.id !== r.id);
@@ -279,7 +298,11 @@ export function normalizePlan(input, report) {
     questions: normLog(logs.questions, 'questions'),
   };
   const dropped = sanitizeLinks(plan.rows);
-  if (report) report.droppedLinks = dropped;
+  if (report) {
+    report.droppedLinks = dropped;
+    report.truncatedDescs = rep.truncated;
+    report.repairedDescs = rep.repaired;
+  }
   return plan;
 }
 

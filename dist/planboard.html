@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="color-scheme" content="light dark">
-<meta name="generator" content="planboard 1.2.0">
+<meta name="generator" content="planboard 1.3.0">
 <title>Planboard</title>
 <style>/* ---- base.css */
 :root {
@@ -14,7 +14,7 @@
   --line: #d3d8e0; --grid: #e9ecf1; --accent: #2b5fd4; --accent-fg: #ffffff; --sel: #dfe9ff; --hover: #f0f3f9;
   --bar: #5a83de; --summary: #333b4b; --milestone: #7a3fd1; --crit: #d0306a; --conf: #e03131; --today: #e8590c;
   --weekend: rgba(30, 40, 60, 0.06); --baseline: #98a1b0; --link: #697286; --focus: #2b5fd4;
-  --danger: #c22a2a; --ok: #2b8a3e; --warn: #b35c00; --info: #1c64c8; --shadow: 0 8px 28px rgba(15, 25, 45, 0.18);
+  --danger: #c22a2a; --ok: #2b8a3e; --done-bar: #2f9e44; --done-row: #e8f6ec; --done-row-sel: #d3ecdc; --warn: #b35c00; --info: #1c64c8; --shadow: 0 8px 28px rgba(15, 25, 45, 0.18);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -23,7 +23,7 @@
     --line: #363c48; --grid: #242931; --accent: #6e9bff; --accent-fg: #0b1222; --sel: #23365c; --hover: #20262f;
     --bar: #5d88e6; --summary: #c9d0dc; --milestone: #b18aff; --crit: #ff6b9b; --conf: #ff6b6b; --today: #ff922b;
     --weekend: rgba(255, 255, 255, 0.045); --baseline: #6c7484; --link: #8e97aa; --focus: #8fb2ff;
-    --danger: #ff6b6b; --ok: #69db7c; --warn: #ffc069; --info: #74a7ff; --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+    --danger: #ff6b6b; --ok: #69db7c; --done-bar: #2f9e44; --done-row: #15291d; --done-row-sel: #1f3d2b; --warn: #ffc069; --info: #74a7ff; --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
     color-scheme: dark;
   }
 }
@@ -32,7 +32,7 @@
   --line: #363c48; --grid: #242931; --accent: #6e9bff; --accent-fg: #0b1222; --sel: #23365c; --hover: #20262f;
   --bar: #5d88e6; --summary: #c9d0dc; --milestone: #b18aff; --crit: #ff6b9b; --conf: #ff6b6b; --today: #ff922b;
   --weekend: rgba(255, 255, 255, 0.045); --baseline: #6c7484; --link: #8e97aa; --focus: #8fb2ff;
-  --danger: #ff6b6b; --ok: #69db7c; --warn: #ffc069; --info: #74a7ff; --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  --danger: #ff6b6b; --ok: #69db7c; --done-bar: #2f9e44; --done-row: #15291d; --done-row-sel: #1f3d2b; --warn: #ffc069; --info: #74a7ff; --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -103,6 +103,7 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; borde
 .bc-prog span { display: block; height: 100%; background: var(--ok); }
 .bc-empty { margin: 8px; font-size: 12px; }
 .bc-desc { font-size: 12px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bcard.done { background: var(--done-row); }
 
 /* ---- card.css */
 .card {
@@ -237,6 +238,41 @@ dialog::backdrop { background: rgba(10, 15, 25, 0.45); }
 .mc-acts { display: flex; gap: 4px; }
 .cf-err:empty { display: none; }
 .m-body .fld textarea { width: 100%; }
+/* Edit options */
+.opt-list { list-style: none; margin: 0 0 10px; padding: 0; border: 1px solid var(--line); border-radius: 8px; max-height: 55vh; overflow: auto; }
+.opt-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+.opt-row:last-child { border-bottom: 0; }
+.opt-row .drag { cursor: grab; color: var(--muted); }
+.opt-row.dragging { opacity: 0.45; }
+.opt-row.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.opt-row.deleted { background: var(--panel); color: var(--muted); }
+.opt-name { flex: 1; min-width: 120px; }
+.opt-color { width: 34px; height: 26px; padding: 0 2px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg); }
+.opt-done { display: flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 12px; }
+.opt-use { min-width: 56px; font-size: 12px; text-align: right; }
+.opt-gone { flex: 1; }
+/* Version history */
+.vh-list { list-style: none; margin: 0; padding: 0; max-height: 60vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.vh-item { padding: 8px 10px; border-bottom: 1px solid var(--grid); }
+.vh-item:last-child { border-bottom: 0; }
+.vh-h { display: flex; gap: 8px; align-items: baseline; }
+.vh-h span { color: var(--muted); font-size: 12px; }
+.vh-ch { margin: 4px 0 6px; padding-left: 18px; font-size: 12px; }
+.vh-act { display: flex; gap: 6px; }
+.vp-wrap { max-height: 65vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.vp { border-collapse: collapse; width: 100%; font-size: 12px; }
+.vp th, .vp td { padding: 3px 6px; border-bottom: 1px solid var(--grid); text-align: left; white-space: nowrap; }
+.vp th { position: sticky; top: 0; background: var(--panel); }
+.vp td.r { text-align: right; }
+.vp tr.sum td { font-weight: 700; }
+.vp tr.done td { background: var(--done-row); }
+.vp-sec td { font-weight: 700; background: color-mix(in srgb, var(--sec) 18%, transparent); }
+.vp-tl { position: relative; min-width: 220px; }
+.vp-bar { position: absolute; top: 6px; height: 9px; border-radius: 3px; background: var(--bar); }
+.vp-bar.sum { background: var(--summary); height: 5px; top: 8px; }
+.vp-bar.done { background: var(--done-bar); }
+.vp-ms { position: absolute; top: 5px; width: 10px; height: 10px; margin-left: -5px; transform: rotate(45deg); background: var(--milestone); }
+.vp-ms.done { background: var(--done-bar); }
 
 /* ---- gantt.css */
 .gt-scroll { height: 100%; overflow: auto; position: relative; background: var(--bg); }
@@ -332,6 +368,32 @@ dialog::backdrop { background: rgba(10, 15, 25, 0.45); }
 .hint-bar { display: flex; align-items: center; gap: 10px; padding: 6px 12px; background: var(--sel); border-bottom: 1px solid var(--line); font-size: 13px; }
 .hint-bar[hidden] { display: none; }
 .hint-bar .hint-text { flex: 1; }
+/* pinned # and name columns stay visible while scrolling horizontally */
+.gc.pin { position: sticky; z-index: 1; background-color: inherit; }
+.gh.pin { position: sticky; z-index: 4; background: var(--panel); }
+.gc.c-num.pin, .gh.pin[data-col="num"] { left: 0; }
+.gc.c-name.pin, .gh.pin[data-col="name"] { left: var(--pinw, 52px); }
+.gc.c-name.pin { box-shadow: 1px 0 0 var(--line); }
+.gr.task[style*="--tint"] .gc.pin { background-image: linear-gradient(color-mix(in srgb, var(--tint) 7%, transparent), color-mix(in srgb, var(--tint) 7%, transparent)); }
+/* complete tasks */
+.gr.done { background: var(--done-row); }
+.gr.done.sel { background: var(--done-row-sel); }
+.done-ck { color: var(--ok); font-weight: 700; margin-right: 4px; flex: none; }
+.gr.done .c-name .nm { color: var(--fg); }
+.pill.opt { color: color-mix(in srgb, var(--opt) 70%, var(--fg)); border-color: var(--opt); background: color-mix(in srgb, var(--opt) 14%, transparent); }
+.prio.opt { color: color-mix(in srgb, var(--opt) 75%, var(--fg)); }
+.gc.c-status.tinted { background-image: linear-gradient(color-mix(in srgb, var(--opt) 10%, transparent), color-mix(in srgb, var(--opt) 10%, transparent)); }
+/* cell range */
+.gc.rg { background-image: linear-gradient(color-mix(in srgb, var(--accent) 12%, transparent), color-mix(in srgb, var(--accent) 12%, transparent)); }
+.gc.rg::after { content: ""; position: absolute; inset: 0; pointer-events: none; border: 0 solid var(--accent); }
+.gc.rg-t::after { border-top-width: 2px; }
+.gc.rg-b::after { border-bottom-width: 2px; }
+.gc.rg-l::after { border-left-width: 2px; }
+.gc.rg-r::after { border-right-width: 2px; }
+.gc.rg-fill::after { content: ""; position: absolute; inset: 0; pointer-events: none; border: 1px dashed var(--accent); }
+.fill-h { position: absolute; right: 0; bottom: 0; width: 7px; height: 7px; background: var(--accent); border: 1px solid var(--bg); cursor: crosshair; z-index: 2; }
+.readonly .fill-h { display: none; }
+.g-body.cell-drag { cursor: cell; user-select: none; }
 
 /* ---- layout.css */
 #app { height: 100vh; display: flex; flex-direction: column; }
@@ -432,7 +494,7 @@ body.presenter { font-size: 15px; }
   @page { size: landscape; margin: 9mm; }
   :root, :root[data-theme="dark"] {
     --bg: #ffffff; --panel: #f3f4f6; --panel2: #e5e7eb; --fg: #111827; --muted: #4b5563; --line: #cfd4dc; --grid: #e5e7eb;
-    --accent: #2b5fd4; --bar: #5a83de; --summary: #333b4b; --milestone: #7a3fd1; --crit: #d0306a; --conf: #e03131;
+    --accent: #2b5fd4; --bar: #5a83de; --summary: #333b4b; --milestone: #7a3fd1; --done-bar: #2f9e44; --crit: #d0306a; --conf: #e03131;
     --today: #e8590c; --weekend: rgba(30, 40, 60, 0.07); --baseline: #98a1b0; --link: #5b6478;
     color-scheme: light;
   }
@@ -1775,15 +1837,197 @@ function textToHtml(text) {
 return { safeUrl, renderMarkdown, markdownToHtml, looksLikeMarkdown, textToHtml };
 })();
 
+// ---- util/htmlparse.js
+const __util_htmlparse = (() => {
+
+// Small inert HTML tokenizer/tree builder exposing the DOM subset read by
+// sanitize.js (nodeType, localName, childNodes, getAttribute, textContent).
+// Used when DOMParser is unavailable (Node, workers) so sanitizing gives the
+// same, idempotent result everywhere. Lenient like a browser: unknown end tags
+// are ignored, raw-text elements (script, style, …) swallow up to their end tag.
+const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr', 'image']);
+const MAX_NEST = 128;
+const RAW = new Set(['script', 'style', 'textarea', 'title', 'xmp', 'iframe', 'noembed', 'noframes', 'plaintext']);
+const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0', copy: '©', middot: '·', hellip: '…', mdash: '—', ndash: '–', bull: '•',
+  lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”', laquo: '«', raquo: '»', euro: '€', pound: '£', reg: '®', trade: '™', times: '×', deg: '°', shy: '\u00ad', ensp: '\u2002', emsp: '\u2003', thinsp: '\u2009' };
+const decodeEntities = (s) =>
+  s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);?/gi, (m, e) => {
+    if (e[0] === '#') {
+      const n = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+      return Number.isFinite(n) && n > 0 && n < 0x110000 ? String.fromCodePoint(n) : '\ufffd';
+    }
+    return ENT[e.toLowerCase()] ?? m;
+  });
+
+class LiteNode {
+  constructor(type, name) {
+    this.nodeType = type;
+    this.nodeName = name;
+    this.localName = type === 1 ? name : undefined;
+    this.childNodes = [];
+    this.attrs = new Map();
+    this.parentNode = null;
+  }
+  getAttribute(n) {
+    return this.attrs.has(n.toLowerCase()) ? this.attrs.get(n.toLowerCase()) : null;
+  }
+  hasAttribute(n) {
+    return this.attrs.has(n.toLowerCase());
+  }
+  get textContent() {
+    if (this.nodeType === 3) return this.nodeValue;
+    if (this.nodeType === 8) return '';
+    return this.childNodes.map((c) => c.textContent).join('');
+  }
+  append(c) {
+    c.parentNode = this;
+    this.childNodes.push(c);
+  }
+}
+
+function parseAttrs(src, el) {
+  const re = /([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
+  let m;
+  while ((m = re.exec(src))) {
+    const k = m[1].toLowerCase();
+    if (!el.attrs.has(k)) el.attrs.set(k, decodeEntities(m[2] ?? m[3] ?? m[4] ?? ''));
+  }
+}
+
+function parseHTML(html) {
+  const doc = new LiteNode(9, '#document');
+  const htmlEl = new LiteNode(1, 'html');
+  const body = new LiteNode(1, 'body');
+  doc.append(htmlEl);
+  htmlEl.append(body);
+  doc.body = body;
+  const stack = [body];
+  const top = () => stack[stack.length - 1];
+  const s = String(html);
+  const lower = s.toLowerCase();
+  let i = 0;
+  const text = (t) => {
+    if (!t) return;
+    const p = top();
+    const last = p.childNodes[p.childNodes.length - 1];
+    if (last && last.nodeType === 3) {
+      last.nodeValue += decodeEntities(t);
+      return;
+    }
+    const n = new LiteNode(3, '#text');
+    n.nodeValue = decodeEntities(t);
+    p.append(n);
+  };
+  // Linear tag scan: quotes only open after "=", and once a quote char has no
+  // later match it is never searched for again, so hostile input such as
+  // `<a "` repeated cannot make the scan quadratic.
+  const noQuote = { '"': false, "'": false };
+  const scanTag = (at) => {
+    let j = at + 1;
+    const close = s[j] === '/';
+    if (close) j++;
+    const c0 = s.charCodeAt(j) | 32;
+    if (!(c0 >= 97 && c0 <= 122)) return 'text';
+    const ns = j;
+    while (j < s.length && !/[\s/>]/.test(s[j])) j++;
+    const name = lower.slice(ns, j);
+    const as = j;
+    let prev = '';
+    while (j < s.length) {
+      const ch = s[j];
+      if (ch === '>') return { close, name, attrs: s.slice(as, j), end: j + 1 };
+      if ((ch === '"' || ch === "'") && prev === '=' && !noQuote[ch]) {
+        const q = s.indexOf(ch, j + 1);
+        if (q < 0) noQuote[ch] = true;
+        else {
+          j = q + 1;
+          prev = ch;
+          continue;
+        }
+      }
+      if (!/\s/.test(ch)) prev = ch;
+      j++;
+    }
+    return 'eof';
+  };
+  while (i < s.length) {
+    const lt = s.indexOf('<', i);
+    if (lt < 0) {
+      text(s.slice(i));
+      break;
+    }
+    text(s.slice(i, lt));
+    i = lt;
+    if (s.startsWith('<!--', i)) {
+      const end = s.indexOf('-->', i + 4);
+      const c = new LiteNode(8, '#comment');
+      top().append(c);
+      i = end < 0 ? s.length : end + 3;
+      continue;
+    }
+    if (s[i + 1] === '!' || s[i + 1] === '?') {
+      const end = s.indexOf('>', i);
+      if (!/^<!doctype/i.test(s.slice(i, i + 9))) top().append(new LiteNode(8, '#comment'));
+      i = end < 0 ? s.length : end + 1;
+      continue;
+    }
+    const m = scanTag(i);
+    if (m === 'eof') {
+      // An unterminated tag runs to the end: keep the rest as text.
+      text(s.slice(i));
+      break;
+    }
+    if (m === 'text') {
+      text('<');
+      i++;
+      continue;
+    }
+    i = m.end;
+    const name = m.name;
+    if (m.close) {
+      for (let k = stack.length - 1; k > 0; k--) {
+        if (stack[k].nodeName === name) {
+          stack.length = k;
+          break;
+        }
+      }
+      continue;
+    }
+    if (name === 'html' || name === 'body' || name === 'head') continue;
+    const el = new LiteNode(1, name);
+    parseAttrs(m.attrs, el);
+    if (name === 'p' || /^h[1-6]$/.test(name) || name === 'li' || name === 'tr' || name === 'td' || name === 'th') {
+      const closes = { p: ['p'], li: ['li', 'p'], tr: ['tr', 'td', 'th'], td: ['td', 'th', 'p'], th: ['td', 'th', 'p'] }[name] || ['p'];
+      if (closes.includes(top().nodeName)) stack.pop();
+    }
+    top().append(el);
+    if (RAW.has(name)) {
+      const end = lower.indexOf(`</${name}`, i);
+      const t = new LiteNode(3, '#text');
+      t.nodeValue = s.slice(i, end < 0 ? s.length : end);
+      el.append(t);
+      i = end < 0 ? s.length : s.indexOf('>', end) + 1 || s.length;
+      continue;
+    }
+    if (!VOID.has(name) && stack.length < MAX_NEST) stack.push(el);
+  }
+  return doc;
+}
+return { decodeEntities, parseHTML };
+})();
+
 // ---- util/sanitize.js
 const __util_sanitize = (() => {
 const { escapeHtml } = __util_escape;
 const { safeUrl } = __util_markdown;
+const { parseHTML, decodeEntities } = __util_htmlparse;
 // Strict allow-list HTML sanitizer for task descriptions (pasted Word / Outlook /
 // OneNote / web content and stored HTML). Input is parsed with DOMParser (inert:
-// no scripts run, nothing loads) and the output is rebuilt from scratch: only the
+// no scripts run, nothing loads), or by the built-in parser in htmlparse.js where
+// there is no DOM (Node), and the output is rebuilt from scratch: only the
 // allow-listed tags and attributes are written, all text is escaped, so nothing
 // from the input can reach the output except through this code.
+
 
 
 
@@ -1817,7 +2061,7 @@ const classOf = (n) => String(attr(n, 'class') || '').toLowerCase();
 
 function parse(html) {
   const P = globalThis.DOMParser;
-  if (!P) return null;
+  if (!P) return parseHTML(html);
   return new P().parseFromString(`<!DOCTYPE html><html><body>${html}</body></html>`, 'text/html');
 }
 
@@ -2065,24 +2309,75 @@ function tableRows(table, ctx) {
     .join('');
 }
 
+// Only used with String#replace (which resets lastIndex); never with .test().
 const EMPTY_INLINE = /<(strong|em|u|s|code|a)\b[^>]*>(\s*)<\/\1>/g;
 const TRAILING_BR = /(?<!<(p|li|td|th|h[123])>)(?:<br>)+<\/(p|li|td|th|h[123]|pre)>/g;
 
 function tidy(html) {
   let s = html;
-  for (let k = 0; k < 4 && EMPTY_INLINE.test(s); k++) s = s.replace(EMPTY_INLINE, '$2');
+  for (let k = 0; k < 4; k++) {
+    const next = s.replace(EMPTY_INLINE, '$2');
+    if (next === s) break;
+    s = next;
+  }
   return s.replace(TRAILING_BR, '</$2>').replace(/<p>\s*<\/p>/g, '').trim();
 }
 
-/** Sanitize untrusted HTML to the description allow-list. Returns an HTML string. */
-function sanitizeHtml(input) {
+/**
+ * Sanitize untrusted HTML to the description allow-list. Returns an HTML string.
+ * Over-long input is cut to MAX_DESC_HTML; pass `report` to learn about it
+ * (`report.truncated = true`).
+ */
+function sanitizeHtml(input, report) {
   const src = String(input == null ? '' : input);
   if (!src.trim()) return '';
+  if (src.length > MAX_DESC_HTML * 4 && report) report.truncated = true;
   const doc = parse(src.slice(0, MAX_DESC_HTML * 4));
-  if (!doc || !doc.body) return src.trim() ? `<p>${escapeHtml(src.replace(CONTROL, ''))}</p>` : '';
   let out = tidy(children(doc.body, { depth: 0 }));
-  if (out.length > MAX_DESC_HTML) out = sanitizeHtml(out.slice(0, MAX_DESC_HTML));
+  if (out.length > MAX_DESC_HTML) {
+    if (report) report.truncated = true;
+    // Cut the clean HTML and re-sanitize (closes the open tags); shrink the cut
+    // until the closing tags fit too.
+    let budget = MAX_DESC_HTML;
+    do {
+      budget -= Math.max(64, out.length - MAX_DESC_HTML);
+      out = tidy(children(parse(out.slice(0, Math.max(0, budget))).body, { depth: 0 }));
+    } while (out.length > MAX_DESC_HTML && budget > 0);
+  }
   return out;
+}
+
+// Descriptions damaged by v1.2's DOM-less fallback hold their own HTML as
+// escaped text, wrapped in <p> once per bad round trip: <p>&lt;p&gt;x…</p>.
+const ESCAPED_LAYER = /^<p>([^<]*)<\/p>$/;
+const HTML_START = /^\s*<(p|h[1-6]|ul|ol|li|div|table|thead|tbody|tr|blockquote|pre|hr|br|section|article)(\s[^<>]*)?\/?>/i;
+const MAX_REPAIR_LEVELS = 6;
+
+/**
+ * Undo up to MAX_REPAIR_LEVELS layers of escaped HTML in sanitized description
+ * HTML. A layer is only decoded when its whole text is markup: it starts with a
+ * block tag and ends with ">". Text such as "<CR>" or "a < b" is left alone.
+ * Returns { html, levels }.
+ */
+function repairEscapedHtml(html) {
+  let s = String(html || '');
+  let levels = 0;
+  while (levels < MAX_REPAIR_LEVELS) {
+    const m = ESCAPED_LAYER.exec(s);
+    if (!m) break;
+    const inner = decodeEntities(m[1]).trim();
+    if (!HTML_START.test(inner) || !inner.endsWith('>')) break;
+    s = sanitizeHtml(inner);
+    levels++;
+  }
+  return { html: s, levels };
+}
+
+/** Stored description → clean HTML: sanitize, then repair escaped layers. */
+function cleanDescHtml(input, report) {
+  const r = repairEscapedHtml(sanitizeHtml(input, report));
+  if (report && r.levels) report.repaired = (report.repaired || 0) + 1;
+  return r.html;
 }
 
 const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", nbsp: ' ' };
@@ -2157,7 +2452,7 @@ function firstLine(text, max = 140) {
   const l = String(text || '').split('\n').map((x) => x.replace(/^[-\s]*(\[[ x]\]\s*)?/, '').trim()).find(Boolean) || '';
   return l.length > max ? `${l.slice(0, max - 1)}…` : l;
 }
-return { ALLOWED_TAGS, MAX_DESC_HTML, sanitizeHtml, htmlToText, descText, firstLine };
+return { ALLOWED_TAGS, MAX_DESC_HTML, sanitizeHtml, MAX_REPAIR_LEVELS, repairEscapedHtml, cleanDescHtml, htmlToText, descText, firstLine };
 })();
 
 // ---- model/fields.js
@@ -2437,13 +2732,276 @@ function distinctValues(plan, field) {
 return { FIELD_TYPES, MAX_FIELDS, MAX_OPTIONS, fieldKey, fieldIdOfKey, RESERVED_NAMES, findField, fieldByName, normOptions, normFields, coerceValue, formatValue, normValues, setFieldValue, addField, renameField, setFieldOptions, deleteField, customKeyUsage, promoteCustomKey, distinctValues };
 })();
 
+// ---- model/options.js
+const __model_options = (() => {
+const { findField, normOptions } = __model_fields;
+// Plan-level option lists for Status and Priority (plan.options), the
+// "counts as complete" flag, and edits to any option list (also custom
+// single-select columns) that migrate the tasks using renamed or deleted
+// options. Pure.
+
+
+const DEFAULT_STATUS_OPTIONS = [
+  { name: 'Not started', color: '#64748b', complete: false },
+  { name: 'In progress', color: '#2563eb', complete: false },
+  { name: 'Blocked', color: '#dc2626', complete: false },
+  { name: 'Done', color: '#16a34a', complete: true },
+];
+const DEFAULT_PRIORITY_OPTIONS = [
+  { name: 'Low', color: '#64748b' },
+  { name: 'Medium', color: '#2563eb' },
+  { name: 'High', color: '#d97706' },
+  { name: 'Critical', color: '#dc2626' },
+];
+const MAX_LIST_OPTIONS = 40;
+const OPTION_COLORS = ['#64748b', '#2563eb', '#0d9488', '#16a34a', '#65a30d', '#d97706', '#ea580c', '#dc2626', '#db2777', '#7c3aed'];
+const COLOR_RE = /^#[0-9a-f]{6}$/i;
+const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+
+function defaultOptions() {
+  return { status: DEFAULT_STATUS_OPTIONS.map((o) => ({ ...o })), priority: DEFAULT_PRIORITY_OPTIONS.map((o) => ({ ...o })) };
+}
+
+function normList(list, dflt, withComplete) {
+  const out = [];
+  for (const o of Array.isArray(list) ? list : []) {
+    const raw = o && typeof o === 'object' ? o : { name: o };
+    const name = String(raw.name == null ? '' : raw.name).trim().slice(0, 60);
+    if (!name || out.some((x) => same(x.name, name))) continue;
+    const d = dflt.find((x) => same(x.name, name));
+    const item = { name, color: COLOR_RE.test(raw.color) ? raw.color.toLowerCase() : d ? d.color : OPTION_COLORS[out.length % OPTION_COLORS.length] };
+    if (withComplete) item.complete = !!raw.complete;
+    out.push(item);
+    if (out.length >= MAX_LIST_OPTIONS) break;
+  }
+  if (!out.length) return dflt.map((o) => ({ ...o }));
+  if (withComplete) {
+    if (!out.some((o) => o.complete)) (out.find((o) => same(o.name, 'Done')) || out[out.length - 1]).complete = true;
+    if (out.length > 1 && out.every((o) => o.complete)) out[0].complete = false;
+  }
+  return out;
+}
+
+/** Validate plan.options from untrusted JSON; plans without lists get the defaults. */
+function normOptionLists(input) {
+  const o = input && typeof input === 'object' ? input : {};
+  return { status: normList(o.status, DEFAULT_STATUS_OPTIONS, true), priority: normList(o.priority, DEFAULT_PRIORITY_OPTIONS, false) };
+}
+
+const listOf = (plan, key, dflt) => (plan && plan.options && Array.isArray(plan.options[key]) && plan.options[key].length ? plan.options[key] : dflt);
+const statusOptions = (plan) => listOf(plan, 'status', DEFAULT_STATUS_OPTIONS);
+const priorityOptions = (plan) => listOf(plan, 'priority', DEFAULT_PRIORITY_OPTIONS);
+const statusNames = (plan) => statusOptions(plan).map((o) => o.name);
+const priorityNames = (plan) => priorityOptions(plan).map((o) => o.name);
+
+/** Canonical option name for user input (case-insensitive), or null. */
+function matchOption(names, value) {
+  const s = String(value == null ? '' : value).trim();
+  if (!s) return null;
+  return names.find((n) => same(n, s)) || null;
+}
+
+function isComplete(plan, status) {
+  return statusOptions(plan).some((o) => o.complete && o.name === status);
+}
+const completeStatuses = (plan) => statusOptions(plan).filter((o) => o.complete).map((o) => o.name);
+const defaultStatus = (plan) => statusOptions(plan)[0].name;
+function defaultPriority(plan) {
+  const names = priorityNames(plan);
+  return matchOption(names, 'Medium') || names[Math.floor((names.length - 1) / 2)];
+}
+
+function optionColor(plan, key, name) {
+  const o = (key === 'priority' ? priorityOptions(plan) : statusOptions(plan)).find((x) => x.name === name);
+  return o ? o.color : '';
+}
+
+/**
+ * Rolled-up status of a summary task: complete when every leaf is complete,
+ * the leaves' common status when they agree, else Blocked / In progress when the
+ * plan has such options, else the most common status among the open leaves.
+ */
+function summaryStatus(tree, id, plan) {
+  const leaves = [];
+  const walk = (x) => {
+    for (const c of tree.children.get(x) || []) tree.isSummary(c) ? walk(c) : leaves.push(tree.byId.get(c));
+  };
+  walk(id);
+  const names = statusNames(plan);
+  if (!leaves.length) return names[0];
+  if (leaves.every((t) => isComplete(plan, t.status))) {
+    const first = leaves[0].status;
+    return leaves.every((t) => t.status === first) ? first : completeStatuses(plan)[0];
+  }
+  if (leaves.every((t) => t.status === leaves[0].status)) return leaves[0].status;
+  const open = leaves.filter((t) => !isComplete(plan, t.status));
+  const blocked = matchOption(names, 'Blocked');
+  if (blocked && open.some((t) => t.status === blocked)) return blocked;
+  const prog = matchOption(names, 'In progress');
+  if (prog) return prog;
+  const n = new Map();
+  for (const t of open) n.set(t.status, (n.get(t.status) || 0) + 1);
+  return [...n.entries()].sort((a, b) => b[1] - a[1])[0][0];
+}
+
+// ---- editing option lists -------------------------------------------------
+// target: 'status' | 'priority' | a custom select field id.
+
+/** Editable copy of a list: [{ name, color?, complete?, from }]. */
+function getOptionList(plan, target) {
+  if (target === 'status') return statusOptions(plan).map((o) => ({ ...o, from: o.name }));
+  if (target === 'priority') return priorityOptions(plan).map((o) => ({ ...o, from: o.name }));
+  const f = findField(plan, target);
+  return f ? f.options.map((name) => ({ name, from: name })) : [];
+}
+
+const valueOf = (t, target) => (target === 'status' || target === 'priority' ? t[target] : t.values ? t.values[target] : undefined);
+
+/** Tasks whose value is `name` in the list `target`. */
+function optionUsage(plan, target, name) {
+  return plan.rows.filter((r) => r.kind !== 'section' && valueOf(r, target) === name).length;
+}
+
+/**
+ * Replace a list with an edited copy. items: [{ name, color, complete, from,
+ * deleted, moveTo }] in the new order; `from` = original name (null = new),
+ * `deleted` items move their tasks to `moveTo` (a kept item's new name; '' clears
+ * a custom column). Renames migrate every task. Returns { error } or
+ * { renamed, moved } (task counts).
+ */
+function applyOptionList(plan, target, items) {
+  const builtIn = target === 'status' || target === 'priority';
+  const field = builtIn ? null : findField(plan, target);
+  if (!builtIn && (!field || field.type !== 'select')) return { error: 'Unknown column.' };
+  const kept = [];
+  for (const it of items) {
+    if (it.deleted) continue;
+    const name = String(it.name == null ? '' : it.name).trim().slice(0, builtIn ? 60 : 100);
+    if (!name) return { error: 'Options need a name.' };
+    if (kept.some((k) => same(k.name, name))) return { error: `“${name}” is listed twice.` };
+    kept.push({ ...it, name });
+  }
+  if (builtIn && !kept.length) return { error: 'Keep at least one option.' };
+  if (kept.length > MAX_LIST_OPTIONS) return { error: `At most ${MAX_LIST_OPTIONS} options.` };
+  if (target === 'status') {
+    if (!kept.some((k) => k.complete)) return { error: 'Flag at least one status as “counts as complete”.' };
+    if (!kept.some((k) => !k.complete)) return { error: 'At least one status must not count as complete.' };
+  }
+  const map = new Map();
+  for (const k of kept) if (k.from != null) map.set(k.from, k.name);
+  for (const it of items) {
+    if (!it.deleted || it.from == null || map.has(it.from)) continue;
+    const used = optionUsage(plan, target, it.from);
+    const to = it.moveTo == null ? null : kept.find((k) => same(k.name, it.moveTo));
+    if (to) map.set(it.from, to.name);
+    else if (!builtIn && (it.moveTo === '' || !used)) map.set(it.from, '');
+    else if (used) return { error: `Choose where the ${used} task${used === 1 ? '' : 's'} using “${it.from}” should move.` };
+  }
+  const wasComplete = (s) => isComplete(plan, s);
+  let renamed = 0;
+  let moved = 0;
+  const changes = [];
+  for (const r of plan.rows) {
+    if (r.kind === 'section') continue;
+    const v = valueOf(r, target);
+    if (v == null || v === '' || !map.has(v)) continue;
+    const nv = map.get(v);
+    const deleted = !kept.some((k) => k.from === v);
+    if (nv !== v) {
+      if (deleted) moved++;
+      else renamed++;
+    }
+    changes.push([r, v, nv]);
+  }
+  for (const r of plan.rows) {
+    if (r.kind === 'section') continue;
+    const v = valueOf(r, target);
+    if (v != null && v !== '' && !map.has(v)) changes.push([r, v, builtIn ? kept[0].name : '']);
+  }
+  const before = new Map(changes.map(([r, v]) => [r, wasComplete(v)]));
+  if (target === 'status') plan.options = { ...(plan.options || {}), status: kept.map((k) => ({ name: k.name, color: COLOR_RE.test(k.color) ? k.color : OPTION_COLORS[0], complete: !!k.complete })), priority: priorityOptions(plan).map((o) => ({ ...o })) };
+  else if (target === 'priority') plan.options = { status: statusOptions(plan).map((o) => ({ ...o })), ...(plan.options || {}), priority: kept.map((k) => ({ name: k.name, color: COLOR_RE.test(k.color) ? k.color : OPTION_COLORS[0] })) };
+  else field.options = normOptions(kept.map((k) => k.name));
+  const finalNames = target === 'status' ? plan.options.status.map((o) => o.name) : target === 'priority' ? plan.options.priority.map((o) => o.name) : field.options;
+  const resolve = (v) => (v === '' ? '' : finalNames.find((n) => same(n, v)) ?? (builtIn ? finalNames[0] : ''));
+  for (const [r, , raw] of changes) {
+    const nv = resolve(raw);
+    if (builtIn) r[target] = nv;
+    else if (nv === '') delete r.values[target];
+    else r.values[target] = nv;
+  }
+  if (target === 'status') {
+    for (const r of plan.rows) {
+      if (r.kind === 'section') continue;
+      const now = isComplete(plan, r.status);
+      const was = before.has(r) ? before.get(r) : now;
+      if (now && r.progress < 100) r.progress = 100;
+      else if (!now && was && r.progress >= 100) r.progress = 90;
+    }
+  }
+  return { renamed, moved };
+}
+
+const edit = (plan, target, fn) => {
+  const items = getOptionList(plan, target);
+  const err = fn(items);
+  return err ? { error: err } : applyOptionList(plan, target, items);
+};
+const find = (items, name) => items.find((i) => same(i.name, name));
+
+const addOption = (plan, target, name, extra = {}) =>
+  edit(plan, target, (items) => {
+    items.push({ color: OPTION_COLORS[items.length % OPTION_COLORS.length], complete: false, ...extra, name, from: null });
+  });
+const renameOption = (plan, target, from, to) =>
+  edit(plan, target, (items) => {
+    const it = find(items, from);
+    if (!it) return `No option “${from}”.`;
+    it.name = to;
+    return null;
+  });
+const deleteOption = (plan, target, name, moveTo) =>
+  edit(plan, target, (items) => {
+    const it = find(items, name);
+    if (!it) return `No option “${name}”.`;
+    it.deleted = true;
+    it.moveTo = moveTo;
+    return null;
+  });
+const moveOption = (plan, target, name, toIndex) =>
+  edit(plan, target, (items) => {
+    const i = items.findIndex((x) => same(x.name, name));
+    if (i < 0) return `No option “${name}”.`;
+    const [it] = items.splice(i, 1);
+    items.splice(Math.max(0, Math.min(items.length, toIndex)), 0, it);
+    return null;
+  });
+const setOptionColor = (plan, target, name, color) =>
+  edit(plan, target, (items) => {
+    const it = find(items, name);
+    if (!it) return `No option “${name}”.`;
+    it.color = color;
+    return null;
+  });
+const setOptionComplete = (plan, name, on) =>
+  edit(plan, 'status', (items) => {
+    const it = find(items, name);
+    if (!it) return `No option “${name}”.`;
+    it.complete = !!on;
+    return null;
+  });
+return { DEFAULT_STATUS_OPTIONS, DEFAULT_PRIORITY_OPTIONS, MAX_LIST_OPTIONS, OPTION_COLORS, defaultOptions, normOptionLists, statusOptions, priorityOptions, statusNames, priorityNames, matchOption, isComplete, completeStatuses, defaultStatus, defaultPriority, optionColor, summaryStatus, getOptionList, optionUsage, applyOptionList, addOption, renameOption, deleteOption, moveOption, setOptionColor, setOptionComplete };
+})();
+
 // ---- model/stats.js
 const __model_stats = (() => {
 const { parseISO, todayISO, workdayDiff } = __schedule_calendar;
 const { isTask } = __model_tree;
 const { descText } = __util_sanitize;
 const { formatValue, findField } = __model_fields;
+const { isComplete, summaryStatus } = __model_options;
 // Header statistics and filtering helpers (pure).
+
 
 
 
@@ -2453,8 +3011,8 @@ function statusDay(plan, now) {
   return parseISO(plan.statusDate || todayISO(now));
 }
 
-function isOverdue(task, day) {
-  return isTask(task) && task.status !== 'Done' && task.progress < 100 && parseISO(task.finish) < day;
+function isOverdue(task, day, plan) {
+  return isTask(task) && !isComplete(plan, task.status) && task.progress < 100 && parseISO(task.finish) < day;
 }
 
 function planStats(plan, tree, now) {
@@ -2472,8 +3030,8 @@ function planStats(plan, tree, now) {
     wp += d * t.progress;
     if (!finish || t.finish > finish) finish = t.finish;
     if (!start || t.start < start) start = t.start;
-    if (isOverdue(t, day)) overdue++;
-    if (t.status === 'Done' || t.progress >= 100) done++;
+    if (isOverdue(t, day, plan)) overdue++;
+    if (isComplete(plan, t.status)) done++;
   }
   return {
     tasks: leaves.length,
@@ -2494,21 +3052,22 @@ function variance(task) {
 
 /**
  * Return a Set of matching task ids for the filter, or null when no filter is active.
- * filter: { text, owner, status, section, overdue, field: { id, value } }
+ * filter: { text, owner, status, section, overdue, hideDone, field: { id, value } }
  * (field.value is the display text, '' = empty)
  */
 function matchTasks(plan, tree, filter, now) {
   const f = filter || {};
   const text = (f.text || '').trim().toLowerCase();
   const fieldFilter = f.field && findField(plan, f.field.id) ? { def: findField(plan, f.field.id), value: String(f.field.value) } : null;
-  if (!text && !f.owner && !f.status && !f.section && !f.overdue && !fieldFilter) return null;
+  if (!text && !f.owner && !f.status && !f.section && !f.overdue && !f.hideDone && !fieldFilter) return null;
   const day = statusDay(plan, now);
   const out = new Set();
   for (const t of tree.tasks) {
     if (f.owner && t.owner !== f.owner) continue;
     if (f.status && t.status !== f.status) continue;
     if (f.section && String(tree.sectionOf.get(t.id)) !== String(f.section)) continue;
-    if (f.overdue && (!isOverdue(t, day) || tree.isSummary(t.id))) continue;
+    if (f.overdue && (!isOverdue(t, day, plan) || tree.isSummary(t.id))) continue;
+    if (f.hideDone && isComplete(plan, tree.isSummary(t.id) ? summaryStatus(tree, t.id, plan) : t.status)) continue;
     if (fieldFilter && formatValue(fieldFilter.def, t.values && t.values[fieldFilter.def.id]) !== fieldFilter.value) continue;
     if (text) {
       const custom = (plan.fields || []).map((fd) => formatValue(fd, t.values && t.values[fd.id]));
@@ -2531,9 +3090,10 @@ const { clampDuration, clampLag, MAX_DURATION, isISODate, parseISO, toISO, today
 const { LINK_TYPES } = __schedule_links;
 const { normalizeLevels } = __model_tree;
 const { sanitizeLinks } = __schedule_engine;
-const { sanitizeHtml, MAX_DESC_HTML } = __util_sanitize;
+const { cleanDescHtml } = __util_sanitize;
 const { markdownToHtml } = __util_markdown;
 const { normFields, normValues } = __model_fields;
+const { defaultOptions, normOptionLists, statusNames, priorityNames, matchOption, defaultStatus, defaultPriority, isComplete } = __model_options;
 // Plan data model: defaults, normalisation of untrusted JSON and serialisation.
 
 
@@ -2543,7 +3103,9 @@ const { normFields, normValues } = __model_fields;
 
 
 
+
 const SCHEMA_VERSION = 1;
+// Built-in defaults; a plan's own lists live in plan.options (see options.js).
 const STATUSES = ['Not started', 'In progress', 'Blocked', 'Done'];
 const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
 const PLAN_STATUSES = ['On track', 'At risk', 'Off track', 'On hold', 'Complete'];
@@ -2613,8 +3175,8 @@ function createTask(plan, fields = {}) {
     finish: toISO(finishFromDuration(s, duration)),
     duration,
     progress: 0,
-    status: 'Not started',
-    priority: 'Medium',
+    status: defaultStatus(plan),
+    priority: defaultPriority(plan),
     owner: '',
     workstream: '',
     tags: [],
@@ -2659,6 +3221,7 @@ function createPlan(fields = {}) {
     status: 'On track',
     rows: [],
     fields: [],
+    options: defaultOptions(),
     nextId: 1,
     baselineSavedAt: null,
     logs: { risks: [], decisions: [], questions: [] },
@@ -2673,7 +3236,18 @@ const str = (v, max = 20000) => (v == null ? '' : String(v).slice(0, max));
 const pick = (v, list, dflt) => (list.includes(v) ? v : dflt);
 const COLOR_RE = /^#[0-9a-f]{6}$/i;
 
-function normTask(t, plan) {
+function desc(t, rep) {
+  const raw = String(t.descHtml);
+  const r = {};
+  const html = cleanDescHtml(raw, r);
+  if (rep) {
+    if (r.truncated) rep.truncated.push(+t.id);
+    if (r.repaired) rep.repaired.push(+t.id);
+  }
+  return html;
+}
+
+function normTask(t, plan, rep) {
   const milestone = !!t.milestone;
   let start = isISODate(t.start) ? t.start : plan.start;
   let finish = isISODate(t.finish) ? t.finish : null;
@@ -2700,18 +3274,19 @@ function normTask(t, plan) {
     t.baseline && isISODate(t.baseline.start) && isISODate(t.baseline.finish)
       ? { start: t.baseline.start, finish: t.baseline.finish }
       : null;
+  const status = matchOption(statusNames(plan), t.status) || defaultStatus(plan);
   return {
     id: +t.id,
     kind: 'task',
     level: Math.max(0, Math.floor(+t.level || 0)),
     name: str(t.name, 500),
-    descHtml: t.descHtml != null ? sanitizeHtml(str(t.descHtml, MAX_DESC_HTML * 2)) : t.desc ? markdownToHtml(str(t.desc)) : '',
+    descHtml: t.descHtml != null ? desc(t, rep) : t.desc ? markdownToHtml(str(t.desc)) : '',
     start,
     finish,
     duration,
-    progress: Math.max(0, Math.min(100, Math.round(+t.progress || 0))),
-    status: pick(t.status, STATUSES, 'Not started'),
-    priority: pick(t.priority, PRIORITIES, 'Medium'),
+    progress: isComplete(plan, status) ? 100 : Math.max(0, Math.min(100, Math.round(+t.progress || 0))),
+    status,
+    priority: matchOption(priorityNames(plan), t.priority) || defaultPriority(plan),
     owner: str(t.owner, 200),
     workstream: str(t.workstream, 200),
     tags: Array.isArray(t.tags) ? t.tags.map((x) => str(x, 60).trim()).filter(Boolean) : [],
@@ -2754,8 +3329,10 @@ function normLog(list, kind) {
 
 /**
  * Validate and fill defaults on a plan from untrusted JSON. Throws on non-plans.
- * Links that would form a cycle (or point at sections) are removed; pass a
- * `report` object to receive them as `report.droppedLinks`.
+ * Idempotent. Links that would form a cycle (or point at sections) are removed;
+ * pass a `report` object to receive them as `report.droppedLinks`, plus the ids
+ * of descriptions cut to the size limit (`truncatedDescs`) and of descriptions
+ * whose escaped-HTML layers were repaired (`repairedDescs`).
  */
 function normalizePlan(input, report) {
   if (!input || typeof input !== 'object' || !Array.isArray(input.rows)) {
@@ -2796,6 +3373,8 @@ function normalizePlan(input, report) {
     plan.settings.columnOrder = [...new Set(s.columnOrder.filter((k) => typeof k === 'string' && /^\w{1,30}$/.test(k)))].slice(0, 200);
   }
   plan.fields = normFields(input.fields);
+  plan.options = normOptionLists(input.options);
+  const rep = { truncated: [], repaired: [] };
   const seen = new Set();
   let maxId = 0;
   plan.rows = [];
@@ -2803,7 +3382,7 @@ function normalizePlan(input, report) {
     if (!r || typeof r !== 'object' || !Number.isInteger(+r.id) || +r.id <= 0 || seen.has(+r.id)) continue;
     seen.add(+r.id);
     maxId = Math.max(maxId, +r.id);
-    plan.rows.push(r.kind === 'section' ? normSection(r) : normTask(r, plan));
+    plan.rows.push(r.kind === 'section' ? normSection(r) : normTask(r, plan, rep));
   }
   normalizeLevels(plan.rows);
   for (const r of plan.rows) if (r.kind !== 'section') r.preds = r.preds.filter((p) => seen.has(p.id) && p.id !== r.id);
@@ -2815,7 +3394,11 @@ function normalizePlan(input, report) {
     questions: normLog(logs.questions, 'questions'),
   };
   const dropped = sanitizeLinks(plan.rows);
-  if (report) report.droppedLinks = dropped;
+  if (report) {
+    report.droppedLinks = dropped;
+    report.truncatedDescs = rep.truncated;
+    report.repairedDescs = rep.repaired;
+  }
   return plan;
 }
 
@@ -2919,9 +3502,11 @@ const { computeTree, normalizeLevels, visibleRows } = __model_tree;
 const { rollup, autoSchedule, findConflicts, sanitizeLinks } = __schedule_engine;
 const { criticalPath } = __schedule_critical;
 const { matchTasks } = __model_stats;
+const { isComplete, summaryStatus } = __model_options;
 const { nowStamp, normalizePlan } = __model_plan;
 const { createHistory, MAX_HISTORY_STEPS } = __model_history;
 // Application store: current plan, derived schedule data, UI state and undo/redo.
+
 
 
 
@@ -2945,8 +3530,9 @@ function createStore({ plan, storage, readOnly = false, embedded = false, presen
     selection: new Set(),
     active: null, // { id, col }
     anchor: null,
+    cellAnchor: null, // { id, col }: the other corner of the grid cell range
     view: 'plan',
-    filter: { text: '', owner: '', status: '', section: '', overdue: false, field: null },
+    filter: { text: '', owner: '', status: '', section: '', overdue: false, hideDone: false, field: null },
     cardId: null,
     d: null,
     saveState: 'saved',
@@ -2985,7 +3571,9 @@ function createStore({ plan, storage, readOnly = false, embedded = false, presen
       const sid = tree.sectionOf.get(t.id);
       if (sid != null) sectionColor.set(t.id, tree.byId.get(sid).color);
     }
-    s.d = { tree, conflicts, conflictKeys, critical, matches, visible, indexOf, sectionColor, moved };
+    const done = new Set();
+    for (const t of tree.tasks) if (isComplete(s.plan, tree.isSummary(t.id) ? summaryStatus(tree, t.id, s.plan) : t.status)) done.add(t.id);
+    s.d = { tree, conflicts, conflictKeys, critical, matches, visible, indexOf, sectionColor, moved, done };
     for (const id of [...s.selection]) if (!tree.byId.has(id)) s.selection.delete(id);
     if (s.active && !tree.byId.has(s.active.id)) s.active = null;
     if (s.cardId != null && !tree.byId.has(s.cardId)) s.cardId = null;
@@ -3091,6 +3679,7 @@ function createStore({ plan, storage, readOnly = false, embedded = false, presen
     s.redoStack = [];
     s.selection.clear();
     s.active = null;
+    s.cellAnchor = null;
     s.cardId = null;
     s.derive(true);
     if (opts.save !== false) s.persist();
@@ -3336,8 +3925,9 @@ const __model_edit = (() => {
 const { parseLinkList, formatLink, LINK_TYPES } = __schedule_links;
 const { linkError } = __schedule_engine;
 const { computeTree, leavesOf, insertionPoint, isTask, blockRange } = __model_tree;
-const { createTask, createSection, STATUSES, PRIORITIES } = __model_plan;
-const { sanitizeHtml, MAX_DESC_HTML } = __util_sanitize;
+const { createTask, createSection } = __model_plan;
+const { statusNames, priorityNames, matchOption, isComplete } = __model_options;
+const { sanitizeHtml } = __util_sanitize;
 const { clampDuration, clampLag, parseISO, toISO, isISODate, nextWorkday, wdIndex, fromWdIndex, applyDateEdit, finishFromDuration, durationFromDates } = __schedule_calendar;
 // Pure editing helpers used by the UI: field edits with status/progress sync,
 // predecessor text, links, moving bars and inserting rows.
@@ -3348,24 +3938,24 @@ const { clampDuration, clampLag, parseISO, toISO, isISODate, nextWorkday, wdInde
 
 
 
-/** Keep status and progress consistent after one of them changed. */
-function syncStatus(task, changed) {
-  if (changed === 'progress') {
-    if (task.progress >= 100) task.status = 'Done';
-    else if (task.status === 'Done') task.status = task.progress > 0 ? 'In progress' : 'Not started';
-    else if (task.progress > 0 && task.status === 'Not started') task.status = 'In progress';
-  } else if (changed === 'status') {
-    if (task.status === 'Done') task.progress = 100;
-    else if (task.status === 'Not started') task.progress = 0;
-    else if (task.progress >= 100) task.progress = 90;
-  }
+
+/**
+ * After a status change: a status that counts as complete sets progress to 100,
+ * the first status (e.g. Not started) sets 0, and leaving complete drops 100 to 90.
+ * Progress edits never change the status.
+ */
+function syncStatus(task, plan) {
+  if (isComplete(plan, task.status)) task.progress = 100;
+  else if (task.status === statusNames(plan)[0]) task.progress = 0;
+  else if (task.progress >= 100) task.progress = 90;
 }
 
 /**
  * Apply a user edit to a task field. Returns an error string or null.
- * `pinned` is the date field to keep when start/finish/duration change.
+ * `pinned` is the date field to keep when start/finish/duration change; `plan`
+ * supplies the Status / Priority option lists (defaults when omitted).
  */
-function setTaskField(task, field, value, pinned) {
+function setTaskField(task, field, value, pinned, plan) {
   switch (field) {
     case 'name':
       task.name = String(value).trim().slice(0, 500);
@@ -3386,20 +3976,26 @@ function setTaskField(task, field, value, pinned) {
     }
     case 'progress': {
       const n = parseInt(String(value).replace('%', ''), 10);
-      if (!Number.isFinite(n)) return 'Progress is a number from 0 to 100.';
-      task.progress = Math.max(0, Math.min(100, n));
-      syncStatus(task, 'progress');
+      if (!/^\s*-?\d+(\.\d+)?\s*%?\s*$/.test(String(value)) || !Number.isFinite(n)) return 'Progress is a number from 0 to 100.';
+      const v = Math.max(0, Math.min(100, n));
+      if (v < 100 && isComplete(plan, task.status)) return `Status “${task.status}” counts as complete, so progress stays 100 %. Change the status first.`;
+      task.progress = v;
       return null;
     }
-    case 'status':
-      if (!STATUSES.includes(value)) return 'Unknown status.';
-      task.status = value;
-      syncStatus(task, 'status');
+    case 'status': {
+      const s = matchOption(statusNames(plan), value);
+      if (!s) return `Unknown status “${String(value).slice(0, 60)}” (choose ${statusNames(plan).join(', ')}).`;
+      if (s === task.status) return null;
+      task.status = s;
+      syncStatus(task, plan);
       return null;
-    case 'priority':
-      if (!PRIORITIES.includes(value)) return 'Unknown priority.';
-      task.priority = value;
+    }
+    case 'priority': {
+      const s = matchOption(priorityNames(plan), value);
+      if (!s) return `Unknown priority “${String(value).slice(0, 60)}” (choose ${priorityNames(plan).join(', ')}).`;
+      task.priority = s;
       return null;
+    }
     case 'milestone':
       task.milestone = !!value;
       if (task.milestone) {
@@ -3418,9 +4014,8 @@ function setTaskField(task, field, value, pinned) {
       task[field] = String(value).trim().slice(0, 200);
       return null;
     case 'descHtml': {
-      const h = sanitizeHtml(value);
-      if (h.length > MAX_DESC_HTML) return 'Description is too long.';
-      task.descHtml = h;
+      // over-long text is cut to MAX_DESC_HTML; the editor warns (see card.js)
+      task.descHtml = sanitizeHtml(value);
       return null;
     }
     case 'notes':
@@ -3555,9 +4150,19 @@ const { descText } = __util_sanitize;
 
 
 
+// Spreadsheet formula injection guard: prefix ' to text a spreadsheet would
+// evaluate. Plain numbers ("-2") and list bullets ("- item", "+ item") are kept
+// unless they also contain formula / DDE syntax.
+function needsFormulaGuard(s) {
+  if (/^[=@\t\r]/.test(s)) return true;
+  if (!/^[+-]/.test(s)) return false;
+  if (/^[+-]\d+([.,]\d+)?%?$/.test(s)) return false;
+  return !(/^[+-] /.test(s) && !/[=|!@]|\w\s*\(/.test(s));
+}
+
 function cell(v) {
   let s = v == null ? '' : String(v);
-  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // spreadsheet formula injection guard
+  if (needsFormulaGuard(s)) s = "'" + s;
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
@@ -3605,7 +4210,7 @@ function toCSV(plan, tree) {
   }
   return '\uFEFF' + lines.join('\r\n') + '\r\n';
 }
-return { CSV_COLUMNS, toCSV };
+return { needsFormulaGuard, CSV_COLUMNS, toCSV };
 })();
 
 // ---- io/standalone.js
@@ -3634,14 +4239,15 @@ function extractPayload(html) {
 }
 
 /**
- * The JSON embedded in a saved file. Saves are editable; only `presenter: true`
+ * The JSON embedded in a saved file; `history` = embedded versions (see versions.js). Saves are editable; only `presenter: true`
  * (Export read-only presenter copy) produces a read-only file, marked mode:'presenter'.
  */
-function buildPayload(plan, { presenter = false, at = new Date().toISOString() } = {}) {
+function buildPayload(plan, { presenter = false, at = new Date().toISOString(), history = null } = {}) {
   const data = JSON.parse(serializePlan(plan, false));
-  return presenter
-    ? { app: 'planboard', mode: 'presenter', readOnly: true, presenter: true, exportedAt: at, plan: data }
-    : { app: 'planboard', mode: 'edit', readOnly: false, presenter: false, savedAt: at, plan: data };
+  if (presenter) return { app: 'planboard', mode: 'presenter', readOnly: true, presenter: true, exportedAt: at, plan: data };
+  const out = { app: 'planboard', mode: 'edit', readOnly: false, presenter: false, savedAt: at, plan: data };
+  if (history && history.length) out.history = history;
+  return out;
 }
 
 /** Only explicit presenter copies open read-only; v1 "standalone copies" (no mode) open editable. */
@@ -3672,6 +4278,277 @@ function resolveBoot(payload, saved) {
   return { source: 'file', plan: file.plan, readOnly: file.readOnly, presenter: file.presenter, file };
 }
 return { embedPayload, extractPayload, buildPayload, isPresenterCopy, payloadStamp, resolveBoot };
+})();
+
+// ---- io/versions.js
+const __io_versions = (() => {
+const { computeTree, isTask } = __model_tree;
+// Version history embedded in a saved file (payload.history): each Save adds
+// { n, savedAt, author, changes, snapshot }. Snapshots are the plan JSON,
+// gzip-compressed and base64-encoded where CompressionStream exists. Pure
+// apart from the (async) compression.
+
+
+const MAX_VERSIONS = 50;
+const MAX_HISTORY_BYTES = 5 * 1024 * 1024;
+/** Largest decoded snapshot accepted (gzip can expand a small file a lot). */
+const MAX_SNAPSHOT_BYTES = 50 * 1024 * 1024;
+const MAX_CHANGES = 14;
+
+// ---- snapshots -------------------------------------------------------------
+
+function toBase64(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function fromBase64(b64) {
+  const s = atob(b64);
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+  return out;
+}
+async function pipe(bytes, stream) {
+  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+}
+
+const canCompress = () => typeof globalThis.CompressionStream === 'function' && typeof globalThis.Response === 'function' && typeof globalThis.Blob === 'function';
+
+/** Plan → { enc: 'gzip-base64' | 'json', data }. */
+async function encodeSnapshot(plan, { compress = canCompress() } = {}) {
+  const json = JSON.stringify(plan);
+  if (compress) {
+    try {
+      return { enc: 'gzip-base64', data: toBase64(await pipe(new TextEncoder().encode(json), new CompressionStream('gzip'))) };
+    } catch (e) {
+      /* fall through */
+    }
+  }
+  return { enc: 'json', data: json };
+}
+
+const tooBig = (max) => new Error(`This version is too large to open (over ${Math.round(max / 1048576)} MB).`);
+
+/** Stream-inflate gzip bytes; abort as soon as the output passes `max` bytes. */
+async function inflate(bytes, max) {
+  const reader = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip')).getReader();
+  const parts = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > max) {
+      reader.cancel().catch(() => {});
+      throw tooBig(max);
+    }
+    parts.push(value);
+  }
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const p of parts) {
+    out.set(p, at);
+    at += p.length;
+  }
+  return out;
+}
+
+/** Snapshot → plan object (untrusted: normalise before use). Throws a readable error when unreadable or too large. */
+async function decodeSnapshot(snap, { maxBytes = MAX_SNAPSHOT_BYTES } = {}) {
+  if (!snap || typeof snap.data !== 'string') throw new Error('This version has no snapshot.');
+  if (snap.enc !== 'json' && snap.enc !== 'gzip-base64') throw new Error(`Unknown snapshot format “${String(snap.enc).slice(0, 20)}”.`);
+  let json;
+  if (snap.enc === 'json') {
+    if (snap.data.length > maxBytes) throw tooBig(maxBytes);
+    json = snap.data;
+  } else {
+    if (typeof globalThis.DecompressionStream !== 'function') throw new Error('This browser cannot read compressed versions.');
+    let bytes;
+    try {
+      bytes = await inflate(fromBase64(snap.data), maxBytes);
+    } catch (e) {
+      if (e && /too large/.test(e.message)) throw e;
+      throw new Error('This version’s snapshot is damaged.');
+    }
+    json = new TextDecoder().decode(bytes);
+  }
+  try {
+    return JSON.parse(json);
+  } catch (e) {
+    throw new Error('This version’s snapshot is damaged.');
+  }
+}
+
+// ---- the history list ------------------------------------------------------
+
+const str = (v, max) => (v == null ? '' : String(v).slice(0, max));
+
+const B64 = /^[A-Za-z0-9+/]*={0,2}$/;
+/** A snapshot is kept only when its format is known and it fits the history budget on its own. */
+function validSnapshot(snap) {
+  if (!snap || typeof snap.data !== 'string' || !snap.data || snap.data.length > MAX_HISTORY_BYTES) return false;
+  if (snap.enc === 'json') return true;
+  return snap.enc === 'gzip-base64' && snap.data.length % 4 === 0 && B64.test(snap.data);
+}
+
+/** Validate a history list from a file (untrusted); oldest first, capped like appendVersion. */
+function normHistory(list, opts) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const v of list.slice(-MAX_VERSIONS * 4)) {
+    if (!v || typeof v !== 'object' || !Number.isInteger(v.n) || v.n < 1 || !validSnapshot(v.snapshot)) continue;
+    const e = {
+      n: v.n,
+      savedAt: str(v.savedAt, 40),
+      author: str(v.author, 80),
+      changes: Array.isArray(v.changes) ? v.changes.slice(0, MAX_CHANGES + 1).map((c) => str(c, 300)) : [],
+      snapshot: { enc: v.snapshot.enc, data: v.snapshot.data },
+    };
+    const key = `${e.n}@${e.savedAt}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(e);
+  }
+  out.sort((a, b) => a.n - b.n || (Date.parse(a.savedAt) || 0) - (Date.parse(b.savedAt) || 0));
+  return capHistory(out, opts);
+}
+
+const utf8Len = (s) => (typeof TextEncoder === 'function' ? new TextEncoder().encode(s).length : s.length);
+const historyBytes = (list) => utf8Len(JSON.stringify(list || []));
+const nextVersionNumber = (list) => (list && list.length ? Math.max(...list.map((v) => v.n)) : 0) + 1;
+
+/**
+ * Drop the oldest versions until at most `maxVersions` remain and the list
+ * fits `maxBytes` (the newest version is always kept).
+ */
+function capHistory(list, { maxVersions = MAX_VERSIONS, maxBytes = MAX_HISTORY_BYTES } = {}) {
+  const out = [...(list || [])];
+  if (out.length > maxVersions) out.splice(0, out.length - maxVersions);
+  if (out.length > 1) {
+    const sizes = out.map((v) => utf8Len(JSON.stringify(v)) + 1);
+    let total = sizes.reduce((a, b) => a + b, 1);
+    while (out.length > 1 && total > maxBytes) {
+      total -= sizes.shift();
+      out.shift();
+    }
+  }
+  return out;
+}
+
+/** Append a version, then cap (see capHistory). */
+const appendVersion = (list, entry, opts) => capHistory([...(list || []), entry], opts);
+
+/** Union of two histories of the same file (e.g. this tab's and the one on disk), capped. */
+function mergeHistories(a, b, opts) {
+  const m = new Map();
+  for (const v of [...(a || []), ...(b || [])]) m.set(`${v.n}@${v.savedAt}`, v);
+  return capHistory([...m.values()].sort((x, y) => (Date.parse(x.savedAt) || 0) - (Date.parse(y.savedAt) || 0) || x.n - y.n), opts);
+}
+
+/** Build the next version entry for `plan` (prev = the last saved plan or null). */
+async function makeVersion(list, plan, prev, { author = '', at = new Date().toISOString(), compress } = {}) {
+  return { n: nextVersionNumber(list), savedAt: at, author: str(author, 80), changes: summarizeChanges(prev, plan), snapshot: await encodeSnapshot(plan, { compress }) };
+}
+
+// ---- change summary --------------------------------------------------------
+
+const q = (s) => `“${String(s || '').slice(0, 60) || '(untitled)'}”`;
+const show = (v) => (v == null || v === '' ? '–' : String(v));
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+/** Short human list of what changed between two plans, e.g. ['“Book steering”: status Not started → Done', '+2 tasks']. */
+function summarizeChanges(prev, next) {
+  const tasksOf = (p) => (p.rows || []).filter(isTask);
+  if (!prev) return [`First saved version (${plural(tasksOf(next).length, 'task')})`];
+  const out = [];
+  if (prev.name !== next.name) out.push(`Plan renamed ${q(prev.name)} → ${q(next.name)}`);
+  for (const k of ['start', 'owner', 'status', 'statusDate']) if (prev[k] !== next[k]) out.push(`Plan ${k === 'statusDate' ? 'status date' : k} ${show(prev[k])} → ${show(next[k])}`);
+  const pt = new Map(tasksOf(prev).map((t) => [t.id, t]));
+  const nt = new Map(tasksOf(next).map((t) => [t.id, t]));
+  const added = [...nt.values()].filter((t) => !pt.has(t.id));
+  const removed = [...pt.values()].filter((t) => !nt.has(t.id));
+  const names = (list) => (list.length <= 3 ? `: ${list.map((t) => q(t.name)).join(', ')}` : '');
+  if (added.length) out.push(`+${plural(added.length, 'task')}${names(added)}`);
+  if (removed.length) out.push(`−${plural(removed.length, 'task')}${names(removed)}`);
+  const tree = computeTree(next.rows || []);
+  const fields = new Map((next.fields || []).map((f) => [f.id, f]));
+  const ROLL = new Set(['start', 'finish', 'duration', 'progress', 'status']);
+  let moved = 0;
+  for (const t of nt.values()) {
+    const o = pt.get(t.id);
+    if (!o) continue;
+    const sum = tree.isSummary(t.id);
+    const d = [];
+    if (o.name !== t.name) d.push(`renamed to ${q(t.name)}`);
+    for (const [k, label, fmt] of [
+      ['status', 'status', show],
+      ['start', 'start', show],
+      ['finish', 'finish', show],
+      ['duration', 'duration', (v) => `${v}d`],
+      ['progress', 'progress', (v) => `${v} %`],
+      ['owner', 'owner', show],
+      ['priority', 'priority', show],
+      ['workstream', 'workstream', show],
+    ]) {
+      if (sum && ROLL.has(k)) continue;
+      if (o[k] !== t[k]) d.push(`${label} ${fmt(o[k])} → ${fmt(t[k])}`);
+    }
+    if (!!o.milestone !== !!t.milestone && !sum) d.push(t.milestone ? 'now a milestone' : 'no longer a milestone');
+    if (!same(o.preds, t.preds)) d.push('predecessors changed');
+    if ((o.descHtml || '') !== (t.descHtml || '')) d.push('description edited');
+    if ((o.notes || '') !== (t.notes || '')) d.push('notes edited');
+    if (!same(o.tags, t.tags)) d.push('tags changed');
+    if (!same(o.custom, t.custom)) d.push('custom fields changed');
+    const keys = new Set([...Object.keys(o.values || {}), ...Object.keys(t.values || {})]);
+    for (const k of keys) {
+      const a = (o.values || {})[k];
+      const b = (t.values || {})[k];
+      if (a !== b && fields.has(k)) d.push(`${fields.get(k).name} ${show(a)} → ${show(b)}`);
+    }
+    if (o.level !== t.level) moved++;
+    if (d.length) out.push(`${q(o.name)}: ${d.join(', ')}`);
+  }
+  const ps = (prev.rows || []).filter((r) => !isTask(r));
+  const ns = new Map((next.rows || []).filter((r) => !isTask(r)).map((r) => [r.id, r]));
+  const psIds = new Set(ps.map((r) => r.id));
+  for (const s of ns.values()) if (!psIds.has(s.id)) out.push(`+ section ${q(s.name)}`);
+  for (const s of ps) {
+    if (!ns.has(s.id)) out.push(`− section ${q(s.name)}`);
+    else if (ns.get(s.id).name !== s.name) out.push(`Section ${q(s.name)} renamed to ${q(ns.get(s.id).name)}`);
+  }
+  const order = (p) => (p.rows || []).map((r) => r.id).filter((id) => pt.has(id) && nt.has(id)).join();
+  if (moved || order(prev) !== order(next)) out.push(moved ? `${plural(moved, 'task')} indented or outdented` : 'Rows reordered');
+  const pf = new Map((prev.fields || []).map((f) => [f.id, f]));
+  for (const f of fields.values()) {
+    if (!pf.has(f.id)) out.push(`+ column ${q(f.name)}`);
+    else if (pf.get(f.id).name !== f.name) out.push(`Column ${q(pf.get(f.id).name)} renamed to ${q(f.name)}`);
+    else if (!same(pf.get(f.id).options, f.options)) out.push(`Options of ${q(f.name)} edited`);
+  }
+  for (const f of pf.values()) if (!fields.has(f.id)) out.push(`− column ${q(f.name)}`);
+  const po = prev.options || {};
+  const no = next.options || {};
+  if (!same(po.status, no.status)) out.push('Status options edited');
+  if (!same(po.priority, no.priority)) out.push('Priority options edited');
+  if (!same(prev.logs, next.logs)) out.push('Logs edited (risks, decisions, questions)');
+  if (!same(prev.baselineSavedAt, next.baselineSavedAt)) out.push(next.baselineSavedAt ? 'Baseline saved' : 'Baseline cleared');
+  if (!out.length) out.push(same({ ...prev, updatedAt: 0 }, { ...next, updatedAt: 0 }) ? 'No changes' : 'View settings changed');
+  if (out.length > MAX_CHANGES) {
+    const rest = out.length - (MAX_CHANGES - 1);
+    out.splice(MAX_CHANGES - 1, out.length, `… and ${plural(rest, 'more change')}`);
+  }
+  return out;
+}
+
+/** Replace the contents of `target` with `source` in place (restore a version), keeping target's id. */
+function replacePlanContents(target, source) {
+  const id = target.id;
+  for (const k of Object.keys(target)) delete target[k];
+  Object.assign(target, JSON.parse(JSON.stringify(source)), { id });
+  return target;
+}
+return { MAX_VERSIONS, MAX_HISTORY_BYTES, MAX_SNAPSHOT_BYTES, canCompress, encodeSnapshot, decodeSnapshot, normHistory, historyBytes, nextVersionNumber, capHistory, appendVersion, mergeHistories, makeVersion, summarizeChanges, replacePlanContents };
 })();
 
 // ---- io/filesave.js
@@ -3823,8 +4700,12 @@ async function ensurePermission(h) {
 const PICKER_TYPES = [{ description: 'Planboard plan (HTML)', accept: { 'text/html': ['.html', '.htm'] } }];
 
 /**
- * env: { showSaveFilePicker (null when unsupported), registry, href, download(name, text), confirm(conflict) -> 'overwrite'|'saveas'|'cancel' }
- * save() resolves { status: 'saved'|'downloaded'|'cancelled'|'failed', name?, reason?, error? }.
+ * env: { showSaveFilePicker (null when unsupported), registry, href, download(name, text),
+ *        confirm(conflict) -> 'overwrite'|'saveas'|'cancel',
+ *        explain() -> true to continue (optional; shown before the one-time picker of a plain Save) }
+ * save() resolves { status: 'saved'|'downloaded'|'cancelled'|'failed', name?, reason?, error?, picked? }.
+ * A remembered handle is written silently; permission "prompt" asks via requestPermission
+ * (a small allow prompt, not a picker). Only a Save without any handle, or Save as, opens the picker.
  */
 function createFileSaver(env) {
   const supported = typeof env.showSaveFilePicker === 'function';
@@ -3833,15 +4714,34 @@ function createFileSaver(env) {
   let known = new Set();
   let ready = Promise.resolve();
 
-  const fallback = (o, reason) => {
-    env.download(o.downloadName, o.html);
+  // o.html may be a function (diskPayload | null) => html, called once with the
+  // same plan's payload read from the target file (to merge its history).
+  const render = async (o, disk = null) => (typeof o.html === 'function' ? o.html(disk) : o.html);
+  const fallback = async (o, reason) => {
+    env.download(o.downloadName, await render(o));
     return { status: 'downloaded', name: o.downloadName, reason };
+  };
+  const samePlan = (text, id) => {
+    const p = text ? extractPayload(text) : null;
+    return p && p.plan && p.plan.id === id ? p : null;
   };
 
   return {
     supported,
     get fileName() {
       return handle ? handle.name : '';
+    },
+    get connected() {
+      return !!handle;
+    },
+    /** Remember `h` (e.g. from File › Open & connect file…) as the file of the bound plan. */
+    async connect(id, h, stamp) {
+      await ready;
+      if (id !== planId) return false;
+      handle = h;
+      if (stamp) known.add(stamp);
+      await env.registry.put(id, env.href, h, stamp);
+      return true;
     },
     /** Point at a plan: loads its remembered handle. `openedStamp` = stamp of the file payload shown. */
     bind(id, openedStamp) {
@@ -3861,6 +4761,7 @@ function createFileSaver(env) {
       if (!supported) return fallback(o, 'unsupported');
       await ready;
       let h = o.saveAs || o.planId !== planId ? null : handle;
+      let disk = null;
       if (h) {
         if ((await ensurePermission(h)) !== 'granted') return fallback(o, 'denied');
         let text = null;
@@ -3878,18 +4779,28 @@ function createFileSaver(env) {
           if (choice === 'saveas') h = null;
           else if (choice !== 'overwrite') return { status: 'cancelled' };
         }
+        if (h) disk = samePlan(text, o.planId);
       }
+      let picked = false;
       if (!h) {
+        if (!o.saveAs && env.explain && !(await env.explain())) return { status: 'cancelled' };
+        picked = true;
         try {
           h = await env.showSaveFilePicker({ suggestedName: o.suggestedName, types: PICKER_TYPES, id: 'planboard' });
         } catch (e) {
           if (e && e.name === 'AbortError') return { status: 'cancelled' };
           return fallback(o, 'picker');
         }
+        try {
+          disk = samePlan(await (await h.getFile()).text(), o.planId);
+        } catch (e) {
+          /* new or unreadable file: nothing to merge */
+        }
       }
+      const html = await render(o, disk);
       try {
         const w = await h.createWritable();
-        await w.write(o.html);
+        await w.write(html);
         await w.close();
       } catch (e) {
         if (e && e.name === 'NotAllowedError') return fallback(o, 'denied');
@@ -3900,7 +4811,7 @@ function createFileSaver(env) {
         known.add(o.stamp);
       }
       await env.registry.put(o.planId, env.href, h, o.stamp);
-      return { status: 'saved', name: h.name };
+      return { status: 'saved', name: h.name, picked };
     },
   };
 }
@@ -4071,6 +4982,9 @@ const GANTT_CSS = `
 .gsvg .sum .b{fill:var(--summary)}
 .gsvg .sum .pg{fill:var(--accent);fill-opacity:.9}
 .gsvg .ms .b{fill:var(--milestone)}
+.gsvg .done .b,.gsvg .done.ms .b,.gsvg .done.sum .b{fill:var(--done-bar)}
+.gsvg .ck{fill:#fff;font-size:10px;font-weight:700;pointer-events:none}
+.gsvg .ms .ck{font-size:8px}
 .gsvg .crit .b{stroke:var(--crit);stroke-width:2.2}
 .gsvg .sel .b{stroke:var(--accent);stroke-width:2.2}
 .gsvg .bl{fill:var(--baseline);fill-opacity:.7}
@@ -4241,10 +5155,11 @@ function renderGantt(o) {
     const cy = y + rowH / 2;
     const b = barGeom(t, range, ppd);
     const summary = tree.isSummary(t.id);
-    const cls = ['bar', summary ? 'sum' : '', b.ms ? 'ms' : '', crit && crit.tasks.has(t.id) ? 'crit' : '', o.selection && o.selection.has(t.id) ? 'sel' : '']
+    const done = !!(o.done && o.done.has(t.id));
+    const cls = ['bar', summary ? 'sum' : '', b.ms ? 'ms' : '', done ? 'done' : '', crit && crit.tasks.has(t.id) ? 'crit' : '', o.selection && o.selection.has(t.id) ? 'sel' : '']
       .filter(Boolean)
       .join(' ');
-    const color = !summary && !b.ms && o.sectionColor && o.sectionColor.get(t.id);
+    const color = !done && !summary && !b.ms && o.sectionColor && o.sectionColor.get(t.id);
     const fill = color ? ` style="fill:${color}"` : '';
     const parts = [];
     if (o.showBaseline && t.baseline) {
@@ -4255,6 +5170,7 @@ function renderGantt(o) {
     if (b.ms) {
       const r = 7;
       parts.push(`<path class="b" d="M${r1(b.cx)},${r1(cy - r)}L${r1(b.cx + r)},${r1(cy)}L${r1(b.cx)},${r1(cy + r)}L${r1(b.cx - r)},${r1(cy)}z"/>`);
+      if (done) parts.push(`<text class="ck" x="${r1(b.cx)}" y="${r1(cy + 3)}" text-anchor="middle">✓</text>`);
     } else if (summary) {
       const ty = r1(cy - 5);
       const h = 7;
@@ -4262,12 +5178,14 @@ function renderGantt(o) {
       const x2 = r1(b.x2);
       const tip = Math.min(5, (x2 - x1) / 2);
       parts.push(`<path class="b" d="M${x1},${ty}H${x2}V${ty + h + 5}L${r1(x2 - tip)},${ty + h}H${r1(x1 + tip)}L${x1},${ty + h + 5}z"/>`);
-      if (t.progress > 0) parts.push(`<rect class="pg" x="${x1}" y="${ty + 2}" width="${r1(((x2 - x1) * t.progress) / 100)}" height="3"/>`);
+      if (t.progress > 0 && !done) parts.push(`<rect class="pg" x="${x1}" y="${ty + 2}" width="${r1(((x2 - x1) * t.progress) / 100)}" height="3"/>`);
     } else {
       const by = r1(cy - bh / 2);
       const w = r1(b.x2 - b.x1);
       parts.push(`<rect class="b" x="${r1(b.x1)}" y="${by}" width="${w}" height="${bh}" rx="3"${fill}/>`);
-      if (t.progress > 0) parts.push(`<rect class="pg" x="${r1(b.x1)}" y="${r1(cy + bh / 2 - 4)}" width="${r1((w * t.progress) / 100)}" height="4" rx="1"/>`);
+      if (done) {
+        if (w >= 14) parts.push(`<text class="ck" x="${r1(b.x1 + 4)}" y="${r1(cy + 3.5)}">✓</text>`);
+      } else if (t.progress > 0) parts.push(`<rect class="pg" x="${r1(b.x1)}" y="${r1(cy + bh / 2 - 4)}" width="${r1((w * t.progress) / 100)}" height="4" rx="1"/>`);
       if (o.interactive) parts.push(`<rect class="rz" x="${r1(b.x2 - 5)}" y="${by}" width="7" height="${bh}"/>`);
     }
     if (o.interactive) {
@@ -4412,6 +5330,46 @@ function resetColumns(plan) {
 return { COLUMNS, customColumn, allColumns, columnLabel, columnOrder, columnState, visibleColumns, setColumnVisible, moveColumn, moveColumnTo, resetColumns };
 })();
 
+// ---- ui/grid/reveal.js
+const __ui_grid_reveal = (() => {
+
+// Scroll maths that keeps the active grid cell fully in view below the sticky
+// header and right of the pinned (#, name) columns. Pure.
+
+/** Left edge (content px) and width of column `ci` given the column widths. */
+function columnBox(widths, ci) {
+  let left = 0;
+  for (let i = 0; i < ci; i++) left += widths[i];
+  return { left, width: widths[ci] || 0 };
+}
+
+/** Width of the leading pinned columns (`pinned` = how many). */
+const pinnedWidth = (widths, pinned) => widths.slice(0, pinned).reduce((a, w) => a + w, 0);
+
+/**
+ * New { top, left } scroll offsets so `cell` is fully visible.
+ * view: { top, left, width, height } (current scroll offsets and client size).
+ * cell: { top, height, left, width } in scroll-content coordinates (the
+ * header is part of the content, so row i starts at headerH + i * rowH).
+ * sticky: { top: header height, left: width of pinned columns, pinned: the cell itself is pinned }.
+ * A cell wider than the free area is aligned to its left edge.
+ */
+function revealCell(view, cell, sticky = {}) {
+  const stTop = sticky.top || 0;
+  const stLeft = sticky.left || 0;
+  let { top, left } = view;
+  if (cell.top - stTop < top) top = cell.top - stTop;
+  else if (cell.top + cell.height > top + view.height) top = cell.top + cell.height - view.height;
+  if (!sticky.pinned) {
+    const free = view.width - stLeft;
+    if (cell.left - stLeft < left || cell.width > free) left = cell.left - stLeft;
+    else if (cell.left + cell.width > left + view.width) left = cell.left + cell.width - view.width;
+  }
+  return { top: Math.max(0, Math.round(top)), left: Math.max(0, Math.round(left)) };
+}
+return { columnBox, pinnedWidth, revealCell };
+})();
+
 // ---- ui/grid/edittrigger.js
 const __ui_grid_edittrigger = (() => {
 
@@ -4495,10 +5453,235 @@ const statusSlug = (s) => String(s).toLowerCase().replace(/\s+/g, '-');
 return { fmtDate, fmtDateLong, fmtStamp, fmtVariance, statusSlug };
 })();
 
+// ---- model/cells.js
+const __model_cells = (() => {
+const { isComplete } = __model_options;
+const { computeTree, isTask } = __model_tree;
+const { setTaskField, predsText, setPredsFromText } = __model_edit;
+const { fieldKey, setFieldValue } = __model_fields;
+// Spreadsheet-style cell operations for the grid: TSV copy, paste (one value
+// over a range, or a block from the active cell), fill down, fill handle and
+// clear. Rows/columns are addressed by index into the visible grid; edits are
+// applied to the plan by id/column key. Pure.
+
+
+
+
+
+const READONLY_COLS = new Set(['num', 'variance', 'id']);
+// Columns a summary task rolls up from its subtasks.
+const ROLLUP_COLS = new Set(['start', 'finish', 'duration', 'progress', 'status']);
+/** Built-in columns that cannot be blank (a cleared cell keeps its value). */
+const REQUIRED_COLS = new Set(['name', 'start', 'finish', 'duration', 'status', 'priority']);
+const MAX_PASTE_CELLS = 20000;
+
+/** Normalised range { r1, c1, r2, c2 } from two corners { r, c }. */
+function normRange(a, b = a) {
+  return { r1: Math.min(a.r, b.r), c1: Math.min(a.c, b.c), r2: Math.max(a.r, b.r), c2: Math.max(a.c, b.c) };
+}
+const rangeSize = (g) => (g.r2 - g.r1 + 1) * (g.c2 - g.c1 + 1);
+
+/** Tab-separated text (Excel / Sheets clipboard) → rows of cells. Quoted cells may hold tabs/newlines. */
+function parseTSV(text) {
+  const s = String(text == null ? '' : text).replace(/^\uFEFF/, '').replace(/(\r\n|\n|\r)$/, '');
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let q = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (q) {
+      if (c === '"' && s[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else if (c === '"') q = false;
+      else cell += c;
+    } else if (c === '"' && cell === '') q = true;
+    else if (c === '\t') {
+      row.push(cell);
+      cell = '';
+    } else if (c === '\n' || c === '\r') {
+      if (c === '\r' && s[i + 1] === '\n') i++;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = '';
+    } else cell += c;
+  }
+  row.push(cell);
+  rows.push(row);
+  return rows;
+}
+
+const tsvCell = (v) => {
+  const s = String(v == null ? '' : v);
+  return /[\t\n\r"]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+const toTSV = (matrix) => matrix.map((r) => r.map(tsvCell).join('\t')).join('\r\n');
+
+const fieldOf = (plan, col) => (plan.fields || []).find((f) => fieldKey(f) === col) || null;
+
+/** Text of one cell as copied (dates ISO, durations in days, predecessors as outline refs). */
+function cellText(plan, tree, row, col) {
+  if (!row) return '';
+  if (!isTask(row)) return col === 'name' ? row.name : '';
+  const f = fieldOf(plan, col);
+  if (f) {
+    const v = row.values ? row.values[f.id] : undefined;
+    if (v == null || v === '') return '';
+    return f.type === 'checkbox' ? (v ? 'Yes' : '') : String(v);
+  }
+  switch (col) {
+    case 'num':
+      return tree.outline.get(row.id) || '';
+    case 'preds':
+      return predsText(row, tree);
+    case 'tags':
+      return (row.tags || []).join(', ');
+    case 'variance':
+      return '';
+    default:
+      return row[col] == null ? '' : String(row[col]);
+  }
+}
+
+/**
+ * Where a clipboard block lands. One value fills the whole selection; a block
+ * whose size divides the selection is repeated over it; otherwise the block is
+ * pasted from the selection's top-left cell down/right, clipped to the grid.
+ * Returns { cells: [{ r, c, value }], range }.
+ */
+function pasteTargets(block, sel, nRows, nCols) {
+  const bh = block.length;
+  const bw = Math.max(...block.map((r) => r.length));
+  const sh = sel.r2 - sel.r1 + 1;
+  const sw = sel.c2 - sel.c1 + 1;
+  const tile = (bh === 1 && bw === 1) || (sh * sw > 1 && sh % bh === 0 && sw % bw === 0);
+  const h = tile ? sh : Math.min(bh, nRows - sel.r1);
+  const w = tile ? sw : Math.min(bw, nCols - sel.c1);
+  const cells = [];
+  for (let i = 0; i < h; i++) {
+    for (let j = 0; j < w; j++) {
+      const v = block[i % bh][j % bw];
+      cells.push({ r: sel.r1 + i, c: sel.c1 + j, value: v == null ? '' : v });
+      if (cells.length >= MAX_PASTE_CELLS) return { cells, range: { r1: sel.r1, c1: sel.c1, r2: sel.r1 + i, c2: sel.c1 + w - 1 } };
+    }
+  }
+  return { cells, range: { r1: sel.r1, c1: sel.c1, r2: sel.r1 + h - 1, c2: sel.c1 + w - 1 } };
+}
+
+/**
+ * Ctrl+D: copy the top row of the selection into the rows below it; a
+ * one-row selection copies from the row above (like Excel).
+ * Returns [{ r, c, from: { r, c } }].
+ */
+function fillDownTargets(sel) {
+  const out = [];
+  const single = sel.r1 === sel.r2;
+  if (single && sel.r1 === 0) return out;
+  const src = single ? sel.r1 - 1 : sel.r1;
+  for (let r = single ? sel.r1 : sel.r1 + 1; r <= sel.r2; r++) for (let c = sel.c1; c <= sel.c2; c++) out.push({ r, c, from: { r: src, c } });
+  return out;
+}
+
+/** Fill handle dragged down to row `toRow`: repeat the selected rows below the selection. */
+function fillHandleTargets(sel, toRow) {
+  const out = [];
+  const h = sel.r2 - sel.r1 + 1;
+  for (let r = sel.r2 + 1; r <= toRow; r++) for (let c = sel.c1; c <= sel.c2; c++) out.push({ r, c, from: { r: sel.r1 + ((r - sel.r2 - 1) % h), c } });
+  return out;
+}
+
+/**
+ * Apply cell edits [{ id, col, value }] to the plan in order, validating and
+ * coercing each value for its column (built-in or custom). Cells that cannot
+ * take the value are skipped: kind 'rollup' (summary rows: dates, duration,
+ * progress, status), 'section' (section rows, except the name), 'readonly'
+ * (computed columns), 'required' (blank value for a column that needs one),
+ * 'invalid' (value rejected; `reason` says why).
+ * Returns { applied, skipped: [{ id, col, value, kind, reason }] }.
+ */
+function applyCellEdits(plan, edits, labels = {}) {
+  const tree = computeTree(plan.rows);
+  const byId = new Map(plan.rows.map((r) => [r.id, r]));
+  const skipped = [];
+  let applied = 0;
+  const skip = (e, kind, reason = '') => skipped.push({ id: e.id, col: e.col, value: e.value, kind, reason });
+  for (const e of edits) {
+    const r = byId.get(e.id);
+    if (!r) continue;
+    const value = String(e.value == null ? '' : e.value);
+    if (READONLY_COLS.has(e.col)) {
+      skip(e, 'readonly');
+      continue;
+    }
+    if (!isTask(r)) {
+      if (e.col !== 'name') skip(e, 'section');
+      else if (!value.trim()) skip(e, 'required', 'Section name cannot be empty.');
+      else if (r.name !== value.trim().slice(0, 300)) {
+        r.name = value.trim().slice(0, 300);
+        applied++;
+      }
+      continue;
+    }
+    if (ROLLUP_COLS.has(e.col) && tree.isSummary(r.id)) {
+      skip(e, 'rollup');
+      continue;
+    }
+    if (e.col === 'finish' && r.milestone) {
+      skip(e, 'invalid', 'A milestone has no separate finish date.');
+      continue;
+    }
+    if (!value.trim() && (REQUIRED_COLS.has(e.col) || (e.col === 'progress' && isComplete(plan, r.status)))) {
+      skip(e, 'required', `${labels[e.col] || e.col} cannot be empty.`);
+      continue;
+    }
+    const before = JSON.stringify(r);
+    let err = null;
+    const f = fieldOf(plan, e.col);
+    if (f) err = setFieldValue(r, f, value);
+    else if (e.col === 'preds') {
+      const errs = setPredsFromText(plan.rows, r.id, value);
+      if (errs.length) err = errs.join(' ');
+    } else if (e.col === 'name') err = setTaskField(r, 'name', value, undefined, plan);
+    else if (e.col === 'progress') err = setTaskField(r, 'progress', value.trim() === '' ? '0' : value, undefined, plan);
+    else err = setTaskField(r, e.col, value.trim(), undefined, plan);
+    if (err) {
+      if (e.col !== 'preds') Object.assign(r, JSON.parse(before));
+      skip(e, 'invalid', err);
+    } else if (JSON.stringify(r) !== before) applied++;
+  }
+  return { applied, skipped };
+}
+
+/** One toast for skipped cells, e.g. "3 cells skipped: 2 on summary rows (they roll up) · 1 invalid (Start “abc”: …)". */
+function skipSummary(skipped, labels = {}) {
+  if (!skipped.length) return '';
+  const n = skipped.length;
+  const by = (k) => skipped.filter((s) => s.kind === k);
+  const parts = [];
+  const roll = by('rollup').length;
+  const sec = by('section').length;
+  const ro = by('readonly').length;
+  const bad = [...by('required'), ...by('invalid')];
+  if (roll) parts.push(`${roll} on summary rows (dates, progress and status roll up)`);
+  if (sec) parts.push(`${sec} on section rows`);
+  if (ro) parts.push(`${ro} in read-only columns`);
+  if (bad.length) {
+    const ex = bad[0];
+    const v = String(ex.value);
+    parts.push(`${bad.length} invalid (${labels[ex.col] || ex.col}${v ? ` “${v.length > 30 ? `${v.slice(0, 29)}…` : v}”` : ''}: ${ex.reason.replace(/\.$/, '')}${bad.length > 1 ? ', …' : ''})`);
+  }
+  return `${n} cell${n === 1 ? '' : 's'} skipped: ${parts.join(' · ')}`;
+}
+return { READONLY_COLS, ROLLUP_COLS, REQUIRED_COLS, MAX_PASTE_CELLS, normRange, rangeSize, parseTSV, toTSV, cellText, pasteTargets, fillDownTargets, fillHandleTargets, applyCellEdits, skipSummary };
+})();
+
 // ---- ui/grid/grid.js
 const __ui_grid_grid = (() => {
 const { escapeHtml: esc } = __util_escape;
-const { visibleColumns, moveColumnTo } = __ui_grid_columns;
+const { visibleColumns, moveColumnTo, columnLabel } = __ui_grid_columns;
+const { revealCell, columnBox, pinnedWidth } = __ui_grid_reveal;
 const { clickAction, keyAction } = __ui_grid_edittrigger;
 const { findField, formatValue, setFieldValue } = __model_fields;
 const { descText } = __util_sanitize;
@@ -4506,7 +5689,8 @@ const { safeUrl } = __util_markdown;
 const { fmtDate, fmtVariance, statusSlug } = __ui_format;
 const { predsText, setTaskField, setPredsFromText } = __model_edit;
 const { moveRows, isTask } = __model_tree;
-const { STATUSES, PRIORITIES } = __model_plan;
+const { statusNames, priorityNames, optionColor, summaryStatus: rolledStatus } = __model_options;
+const { normRange, rangeSize, parseTSV, toTSV, cellText, pasteTargets, fillDownTargets, fillHandleTargets, applyCellEdits, skipSummary } = __model_cells;
 const { variance, isOverdue, statusDay } = __model_stats;
 const { parseISO, toYMD } = __schedule_calendar;
 const { mod, isTyping } = __ui_dom;
@@ -4526,20 +5710,15 @@ const { mod, isTyping } = __ui_dom;
 
 
 
+
+
 const OVERSCAN = 10;
 const HEAD_H = 44;
 const DATE_COLS = new Set(['start', 'finish', 'duration', 'progress']);
 
-function summaryStatus(tree, id) {
-  const leaves = [];
-  const walk = (x) => {
-    for (const c of tree.children.get(x)) tree.isSummary(c) ? walk(c) : leaves.push(tree.byId.get(c));
-  };
-  walk(id);
-  if (leaves.length && leaves.every((t) => t.status === 'Done')) return 'Done';
-  if (leaves.some((t) => t.status === 'Blocked')) return 'Blocked';
-  if (leaves.some((t) => t.status !== 'Not started' || t.progress > 0)) return 'In progress';
-  return 'Not started';
+/** Status shown on a summary row (see options.js summaryStatus). */
+function summaryStatus(tree, id, plan) {
+  return rolledStatus(tree, id, plan);
 }
 
 function createGrid(app, root) {
@@ -4557,6 +5736,11 @@ function createGrid(app, root) {
   let editing = null;
   let released = false;
   let suppressClick = false;
+  let clip = null; // last copied TSV (fallback when the clipboard event has no data)
+  let cellDrag = null;
+  let fillDrag = null;
+  let fillPreview = null;
+  let autoScrollX = 0;
 
   const rowH = () => app.rowH();
   const colDef = (key) => cols.find((x) => x.key === key);
@@ -4582,7 +5766,8 @@ function createGrid(app, root) {
         const tog = summary
           ? `<button type="button" class="tog" data-act="toggle" tabindex="-1" aria-expanded="${!t.collapsed}" aria-label="${t.collapsed ? 'Expand' : 'Collapse'} ${esc(t.name)}">${t.collapsed ? '▸' : '▾'}</button>`
           : '<span class="tog-sp"></span>';
-        return `<span class="ind" style="width:${t.level * 18}px"></span>${tog}${t.milestone ? '<span class="ms-ic" title="Milestone">◆</span>' : ''}<span class="nm">${esc(t.name) || '<span class="muted">(untitled)</span>'}</span>${t.descHtml ? '<span class="has-desc" title="Has a description" aria-hidden="true">≡</span>' : ''}<button type="button" class="open-btn" data-act="card" tabindex="-1" title="Open task details (Enter)" aria-label="Open details for ${esc(t.name || 'task')}">↗</button>`;
+        const done = store.d.done.has(t.id) ? '<span class="done-ck" title="Complete" aria-label="Complete">✓</span>' : '';
+        return `<span class="ind" style="width:${t.level * 18}px"></span>${tog}${done}${t.milestone ? '<span class="ms-ic" title="Milestone">◆</span>' : ''}<span class="nm">${esc(t.name) || '<span class="muted">(untitled)</span>'}</span>${t.descHtml ? '<span class="has-desc" title="Has a description" aria-hidden="true">≡</span>' : ''}<button type="button" class="open-btn" data-act="card" tabindex="-1" title="Open task details (Enter)" aria-label="Open details for ${esc(t.name || 'task')}">↗</button>`;
       }
       case 'start':
         return esc(fmtDate(t.start, ctx.year));
@@ -4597,11 +5782,11 @@ function createGrid(app, root) {
       case 'preds':
         return esc(predsText(t, tree));
       case 'status': {
-        const s = summary ? summaryStatus(tree, t.id) : t.status;
-        return `<span class="pill st-${statusSlug(s)}">${esc(s)}</span>`;
+        const s = summary ? rolledStatus(tree, t.id, store.plan) : t.status;
+        return `<span class="pill opt st-${statusSlug(s)}" style="--opt:${esc(optionColor(store.plan, 'status', s))}">${esc(s)}</span>`;
       }
       case 'priority':
-        return summary ? '' : `<span class="prio pr-${t.priority.toLowerCase()}">${esc(t.priority)}</span>`;
+        return summary ? '' : `<span class="prio opt pr-${statusSlug(t.priority)}" style="--opt:${esc(optionColor(store.plan, 'priority', t.priority))}">${esc(t.priority)}</span>`;
       case 'workstream':
         return esc(t.workstream);
       case 'variance': {
@@ -4627,6 +5812,23 @@ function createGrid(app, root) {
     return esc(formatValue(f, v));
   }
 
+  // range outline / fill preview classes for cell (i, ci)
+  function rgCls(i, ci, ctx) {
+    let out = '';
+    const g = ctx.rg;
+    if (g && g.multi && i >= g.r1 && i <= g.r2 && ci >= g.c1 && ci <= g.c2) {
+      out += ' rg';
+      if (i === g.r1) out += ' rg-t';
+      if (i === g.r2) out += ' rg-b';
+      if (ci === g.c1) out += ' rg-l';
+      if (ci === g.c2) out += ' rg-r';
+    }
+    const f = ctx.fill;
+    if (f && i >= f.r1 && i <= f.r2 && ci >= f.c1 && ci <= f.c2) out += ' rg-fill';
+    return out;
+  }
+  const fillHandle = (i, ci, ctx) => (ctx.rg && !store.readOnly && i === ctx.rg.r2 && ci === ctx.rg.c2 ? '<span class="fill-h" data-act="fill" title="Drag down to fill (or Ctrl+D)" aria-hidden="true"></span>' : '');
+
   function rowHTML(r, i, ctx) {
     const s = store;
     const { tree } = s.d;
@@ -4636,18 +5838,20 @@ function createGrid(app, root) {
     if (r.kind === 'section') {
       const n = ctx.sectionCounts.get(r.id) || 0;
       return `<div class="gr section${sel ? ' sel' : ''}" role="row" aria-selected="${sel}" data-id="${r.id}" style="top:${top}px;--sec:${r.color}">
-<div class="gc c-num${act ? ' act' : ''}" data-col="num" role="gridcell" id="gc-${r.id}-num"><span class="drag" title="Drag to move section" aria-hidden="true">⋮⋮</span></div>
-<div class="gc sec-body${act && act !== 'num' ? ' act' : ''}" data-col="name" role="gridcell" id="gc-${r.id}-name"><button type="button" class="tog" data-act="toggle" tabindex="-1" aria-expanded="${!r.collapsed}" aria-label="${r.collapsed ? 'Expand' : 'Collapse'} section ${esc(r.name)}">${r.collapsed ? '▸' : '▾'}</button><button type="button" class="swatch edit-only" data-act="color" tabindex="-1" style="background:${r.color}" aria-label="Change colour of section ${esc(r.name)}"></button><span class="nm">${esc(r.name)}</span><span class="sec-count">${n} task${n === 1 ? '' : 's'}</span><button type="button" class="btn ic sec-menu edit-only" data-act="sec-menu" tabindex="-1" aria-label="Section actions for ${esc(r.name)}">⋯</button></div></div>`;
+<div class="gc c-num pin${act === 'num' ? ' act' : ''}${rgCls(i, 0, ctx)}" data-col="num" role="gridcell" id="gc-${r.id}-num"><span class="drag" title="Drag to move section" aria-hidden="true">⋮⋮</span></div>
+<div class="gc sec-body${act && act !== 'num' ? ' act' : ''}${ctx.rg && ctx.rg.c2 >= 1 ? rgCls(i, Math.max(1, ctx.rg.c1), ctx) : ''}" data-col="name" role="gridcell" id="gc-${r.id}-name"><button type="button" class="tog" data-act="toggle" tabindex="-1" aria-expanded="${!r.collapsed}" aria-label="${r.collapsed ? 'Expand' : 'Collapse'} section ${esc(r.name)}">${r.collapsed ? '▸' : '▾'}</button><button type="button" class="swatch edit-only" data-act="color" tabindex="-1" style="background:${r.color}" aria-label="Change colour of section ${esc(r.name)}"></button><span class="nm">${esc(r.name)}</span><span class="sec-count">${n} task${n === 1 ? '' : 's'}</span><button type="button" class="btn ic sec-menu edit-only" data-act="sec-menu" tabindex="-1" aria-label="Section actions for ${esc(r.name)}">⋯</button></div></div>`;
     }
     const summary = tree.isSummary(r.id);
-    const cls = ['gr', 'task', summary ? 'sum' : '', sel ? 'sel' : '', ctx.critical && ctx.critical.tasks.has(r.id) ? 'crit' : '', isOverdue(r, ctx.day) && !summary ? 'overdue' : '']
+    const done = s.d.done.has(r.id);
+    const cls = ['gr', 'task', summary ? 'sum' : '', sel ? 'sel' : '', done ? 'done' : '', ctx.critical && ctx.critical.tasks.has(r.id) ? 'crit' : '', !done && isOverdue(r, ctx.day, s.plan) && !summary ? 'overdue' : '']
       .filter(Boolean)
       .join(' ');
     const tint = s.d.sectionColor.get(r.id);
+    const stColor = cols.some((c) => c.key === 'status') ? optionColor(s.plan, 'status', summary ? rolledStatus(tree, r.id, s.plan) : r.status) : '';
     const cells = cols
       .map(
-        (c) =>
-          `<div class="gc c-${c.key}${c.field ? ' c-cf' : ''}${c.align === 'r' ? ' r' : c.align === 'c' ? ' c' : ''}${act === c.key ? ' act' : ''}" data-col="${c.key}" role="gridcell" id="gc-${r.id}-${c.key}">${cellHTML(r, c, ctx)}</div>`
+        (c, ci) =>
+          `<div class="gc c-${c.key}${c.fixed ? ' pin' : ''}${c.field ? ' c-cf' : ''}${c.align === 'r' ? ' r' : c.align === 'c' ? ' c' : ''}${c.key === 'status' ? ' tinted' : ''}${act === c.key ? ' act' : ''}${rgCls(i, ci, ctx)}" data-col="${c.key}" role="gridcell" id="gc-${r.id}-${c.key}"${c.key === 'status' ? ` style="--opt:${esc(stColor)}"` : ''}>${cellHTML(r, c, ctx)}${fillHandle(i, ci, ctx)}</div>`
       )
       .join('');
     return `<div class="${cls}" role="row" aria-selected="${sel}" aria-level="${r.level + 1}" data-id="${r.id}" style="top:${top}px${tint ? `;--tint:${tint}` : ''}">${cells}</div>`;
@@ -4660,10 +5864,11 @@ function createGrid(app, root) {
     root.style.setProperty('--gcols', tmpl);
     root.style.setProperty('--gwidth', `${total}px`);
     root.style.setProperty('--rowh', `${rowH()}px`);
+    root.style.setProperty('--pinw', `${cols[0] && cols[0].key === 'num' ? cols[0].width : 0}px`);
     head.innerHTML = cols
       .map(
         (c) =>
-          `<div class="gh${c.align === 'r' ? ' r' : ''}${c.field ? ' gh-cf' : ''}" data-col="${c.key}" role="columnheader"${c.fixed ? '' : ` draggable="true"`} title="${esc(c.title ? `${c.title} · ` : '')}${c.fixed ? 'Right-click for column options' : 'Drag to reorder · right-click for options'}"><span class="gh-l">${esc(c.label)}</span>${c.key !== 'num' ? `<span class="rs" data-rs="${c.key}" title="Drag to resize" aria-hidden="true"></span>` : ''}</div>`
+          `<div class="gh${c.fixed ? ' pin' : ''}${c.align === 'r' ? ' r' : ''}${c.field ? ' gh-cf' : ''}" data-col="${c.key}" role="columnheader"${c.fixed ? '' : ` draggable="true"`} title="${esc(c.title ? `${c.title} · ` : '')}${c.fixed ? 'Right-click for column options' : 'Drag to reorder · right-click for options'}"><span class="gh-l">${esc(c.label)}</span>${c.key !== 'num' ? `<span class="rs" data-rs="${c.key}" title="Drag to resize" aria-hidden="true"></span>` : ''}</div>`
       )
       .join('');
     const n = store.d.visible.length;
@@ -4687,12 +5892,18 @@ function createGrid(app, root) {
       day: statusDay(store.plan),
       critical: store.d.critical,
       sectionCounts: sectionCounts(),
+      rg: range(),
+      fill: fillPreview,
     };
+    if (ctx.rg) ctx.rg.multi = rangeSize(ctx.rg) > 1;
     const out = [];
     for (let i = from; i < to; i++) out.push(rowHTML(store.d.visible[i], i, ctx));
     rowsEl.innerHTML = out.join('');
     const a = store.active;
-    if (a && store.d.indexOf.has(a.id)) body.setAttribute('aria-activedescendant', `gc-${a.id}-${a.col}`);
+    if (a && store.d.indexOf.has(a.id)) {
+      const sec = store.d.tree.byId.get(a.id).kind === 'section';
+      body.setAttribute('aria-activedescendant', `gc-${a.id}-${sec ? (a.col === 'num' ? 'num' : 'name') : a.col}`);
+    }
     else body.removeAttribute('aria-activedescendant');
   }
 
@@ -4708,15 +5919,108 @@ function createGrid(app, root) {
     return m;
   }
 
-  function ensureVisible(id) {
+  /** Scroll so the row (and the cell in `col`, default the active column) is fully visible. */
+  function ensureVisible(id, col = store.active && store.active.id === id ? store.active.col : null) {
     const i = store.d.indexOf.get(id);
     if (i == null) return;
     const h = rowH();
-    const top = i * h;
-    const viewH = scroll.clientHeight - HEAD_H - 16;
-    if (top < scroll.scrollTop) scroll.scrollTop = top;
-    else if (top + h > scroll.scrollTop + viewH) scroll.scrollTop = top + h - viewH;
+    const widths = cols.map((c) => c.width);
+    const pinned = cols.filter((c) => c.fixed).length;
+    const ci = col ? cols.findIndex((c) => c.key === col) : -1;
+    const section = store.d.visible[i].kind === 'section';
+    const box = ci >= 0 ? columnBox(widths, ci) : { left: 0, width: 0 };
+    const next = revealCell(
+      { top: scroll.scrollTop, left: scroll.scrollLeft, width: scroll.clientWidth, height: scroll.clientHeight },
+      { top: HEAD_H + i * h, height: h, left: box.left, width: box.width },
+      { top: HEAD_H, left: pinnedWidth(widths, pinned), pinned: section || ci < pinned }
+    );
+    if (next.top !== Math.round(scroll.scrollTop)) scroll.scrollTop = next.top;
+    if (next.left !== Math.round(scroll.scrollLeft)) scroll.scrollLeft = next.left;
     renderWindow();
+  }
+
+  // ---- cell range ----------------------------------------------------------
+  const colIndex = (key) => Math.max(0, cols.findIndex((c) => c.key === key));
+  /** Current cell range { r1, c1, r2, c2 } (visible row / column indices) or null. */
+  function range() {
+    const a = store.active;
+    if (!a || !store.d.indexOf.has(a.id) || !cols.length) return null;
+    const an = store.cellAnchor && store.d.indexOf.has(store.cellAnchor.id) ? store.cellAnchor : a;
+    return normRange({ r: store.d.indexOf.get(an.id), c: colIndex(an.col) }, { r: store.d.indexOf.get(a.id), c: colIndex(a.col) });
+  }
+  /** Select range g with the active cell at its top-left. */
+  function setRange(g) {
+    const vis = store.d.visible;
+    if (!vis[g.r1] || !vis[g.r2]) return;
+    store.anchor = vis[g.r2].id;
+    store.cellAnchor = { id: vis[g.r2].id, col: cols[g.c2].key };
+    app.select(vis[g.r1].id, { extend: true, col: cols[g.c1].key, keepCard: true });
+    ensureVisible(vis[g.r1].id);
+  }
+  const labels = () => Object.fromEntries(cols.map((c) => [c.key, columnLabel(c)]));
+  function rangeTSV(g) {
+    const out = [];
+    for (let r = g.r1; r <= g.r2; r++) out.push(cols.slice(g.c1, g.c2 + 1).map((c) => cellText(store.plan, store.d.tree, store.d.visible[r], c.key)));
+    return toTSV(out);
+  }
+  /** Apply [{ r, c, value }] as ONE undoable step; one toast lists skipped cells. */
+  function applyCells(label, cells, after, quiet = []) {
+    if (store.readOnly) return store.emit('readonly');
+    const vis = store.d.visible;
+    const edits = cells.filter((x) => vis[x.r] && cols[x.c]).map((x) => ({ id: vis[x.r].id, col: cols[x.c].key, value: x.value }));
+    if (!edits.length) return undefined;
+    const lb = labels();
+    let res = null;
+    store.commit(label, (plan) => {
+      res = applyCellEdits(plan, edits, lb);
+      return res.applied ? undefined : false;
+    });
+    if (after) setRange(after);
+    const skipped = res ? res.skipped.filter((x) => !quiet.includes(x.kind)) : [];
+    if (skipped.length) app.toast(skipSummary(skipped, lb), 'warn', 7000);
+    return undefined;
+  }
+  function pasteText(text) {
+    const g = range();
+    if (!g || text == null || text === '') return;
+    const block = parseTSV(text);
+    const { cells, range: out } = pasteTargets(block, g, store.d.visible.length, cols.length);
+    applyCells(cells.length > 1 ? `Paste ${cells.length} cells` : 'Paste', cells, out);
+  }
+  function clearRange() {
+    const g = range();
+    if (!g) return;
+    const cells = [];
+    for (let r = g.r1; r <= g.r2; r++) for (let c = g.c1; c <= g.c2; c++) cells.push({ r, c, value: '' });
+    applyCells('Clear cells', cells, null, ['section', 'rollup', 'readonly', 'required']);
+  }
+  function fromCells(targets) {
+    return targets.map((x) => ({ r: x.r, c: x.c, value: cellText(store.plan, store.d.tree, store.d.visible[x.from.r], cols[x.from.c].key) }));
+  }
+  function fillDown() {
+    const g = range();
+    if (!g) return;
+    const t = fillDownTargets(g);
+    if (!t.length) return;
+    applyCells('Fill down', fromCells(t), g.r1 === g.r2 ? null : g);
+  }
+  /** Visible row / column index under a pointer position (pinned columns accounted for). */
+  function cellAt(x, y) {
+    const sr = scroll.getBoundingClientRect();
+    const n = store.d.visible.length;
+    const r = Math.max(0, Math.min(n - 1, Math.floor((y - sr.top - HEAD_H + scroll.scrollTop) / rowH())));
+    const widths = cols.map((c) => c.width);
+    const pin = pinnedWidth(widths, cols.filter((c) => c.fixed).length);
+    const px = x - sr.left;
+    const cx = px < pin ? px : px + scroll.scrollLeft;
+    let c = 0;
+    for (let acc = 0; c < cols.length - 1 && acc + widths[c] <= cx; c++) acc += widths[c];
+    return { r, c };
+  }
+  function edgeScroll(e) {
+    const sr = scroll.getBoundingClientRect();
+    autoScroll = e.clientY < sr.top + HEAD_H + 24 ? -1 : e.clientY > sr.bottom - 24 ? 1 : 0;
+    autoScrollX = e.clientX < sr.left + 24 ? -1 : e.clientX > sr.right - 24 ? 1 : 0;
   }
 
   // ---- editing -----------------------------------------------------------
@@ -4758,7 +6062,7 @@ function createGrid(app, root) {
     if (field && field.type === 'checkbox') return toggleCheck(id, col);
     if (col === 'status' || col === 'priority' || (field && field.type === 'select')) {
       input = document.createElement('select');
-      const list = field ? ['', ...field.options] : col === 'status' ? STATUSES : PRIORITIES;
+      const list = field ? ['', ...field.options] : col === 'status' ? statusNames(store.plan) : priorityNames(store.plan);
       input.innerHTML = list.map((s) => `<option${s === orig ? ' selected' : ''}>${esc(s)}</option>`).join('');
     } else if (field) {
       input = document.createElement('input');
@@ -4828,7 +6132,7 @@ function createGrid(app, root) {
           return f ? setFieldValue(t, f, v) || undefined : false;
         }
         if (ed.col === 'name' && !v.trim()) return 'Task name cannot be empty.';
-        return setTaskField(t, ed.col, v) || undefined;
+        return setTaskField(t, ed.col, v, undefined, plan) || undefined;
       });
     } else renderWindow(true);
     if (!fromBlur) {
@@ -4861,8 +6165,8 @@ function createGrid(app, root) {
     i = Math.max(0, Math.min(vis.length - 1, i + dRow));
     ci = Math.max(0, Math.min(keys.length - 1, ci + dCol));
     const r = vis[i];
-    app.select(r.id, { extend, col: r.kind === 'section' && ci > 1 ? 'name' : keys[ci], keepCard: true });
-    ensureVisible(r.id);
+    app.select(r.id, { extend, col: keys[ci], keepCard: true });
+    ensureVisible(r.id, keys[ci]);
   }
 
   body.addEventListener('keydown', (e) => {
@@ -4897,6 +6201,17 @@ function createGrid(app, root) {
       handled();
       return app.select(vis[0].id, { col: 'name' });
     }
+    if (mod(e) && !e.altKey && a) {
+      const lk = k.toLowerCase();
+      if (lk === 'd') {
+        handled();
+        return fillDown();
+      }
+      if (lk === 'a') {
+        handled();
+        return vis.length && cols.length ? setRange({ r1: 0, c1: 0, r2: vis.length - 1, c2: cols.length - 1 }) : undefined;
+      }
+    }
     switch (k) {
       case 'ArrowDown':
       case 'ArrowUp':
@@ -4911,11 +6226,11 @@ function createGrid(app, root) {
           if (isCollapsible && !!r.collapsed !== (k === 'ArrowLeft')) app.toggleCollapse(r.id);
           return undefined;
         }
-        return move(0, k === 'ArrowRight' ? 1 : -1, false);
+        return move(0, k === 'ArrowRight' ? 1 : -1, e.shiftKey);
       case 'Home':
       case 'End':
         handled();
-        return mod(e) ? move(k === 'Home' ? -1e9 : 1e9, 0, e.shiftKey) : move(0, k === 'Home' ? -1e9 : 1e9, false);
+        return mod(e) ? move(k === 'Home' ? -1e9 : 1e9, 0, e.shiftKey) : move(0, k === 'Home' ? -1e9 : 1e9, e.shiftKey);
       case 'PageDown':
       case 'PageUp':
         handled();
@@ -4933,18 +6248,28 @@ function createGrid(app, root) {
       case 'Delete':
       case 'Backspace':
         handled();
-        return app.deleteSelection();
+        // the # column (row handles) or Ctrl+Delete removes rows; elsewhere Delete clears the cells
+        if (mod(e) || (a && a.col === 'num')) return app.deleteSelection();
+        return clearRange();
       case 'Tab':
         if (released || !a) return undefined;
         handled();
         return e.shiftKey ? app.outdent() : app.indent();
-      case 'Escape':
+      case 'Escape': {
+        const g = range();
+        if (g && rangeSize(g) > 1) {
+          handled();
+          store.cellAnchor = { ...a };
+          store.anchor = a.id;
+          return app.select(a.id, { col: a.col, keepCard: true });
+        }
         released = true;
         if (store.cardId != null) {
           handled();
           return app.closeCard();
         }
         return app.toast('Grid released: Tab now moves focus out of the grid.', 'info', 2000);
+      }
       case ' ':
         if (r && decide() === 'toggle-check') {
           handled();
@@ -4974,6 +6299,41 @@ function createGrid(app, root) {
   body.addEventListener('focus', () => {
     released = false;
     if (!store.active && store.d.visible.length) app.select(store.d.visible[0].id, { col: 'name', keepCard: true });
+  });
+
+  // ---- clipboard: TSV like Excel / Sheets -----------------------------------
+  // Chrome dispatches copy / paste at document.body when the focused element
+  // is not editable, so listen on the document while the grid has focus.
+  const gridFocused = () => document.activeElement === body && !editing;
+  function copyRange(e) {
+    if (!gridFocused()) return false;
+    const g = range();
+    if (!g) return false;
+    const text = rangeTSV(g);
+    e.preventDefault();
+    if (e.clipboardData) e.clipboardData.setData('text/plain', text);
+    clip = text;
+    const n = rangeSize(g);
+    app.toast(`Copied ${n} cell${n === 1 ? '' : 's'}.`, 'info', 1500);
+    return true;
+  }
+  document.addEventListener('copy', copyRange);
+  document.addEventListener('cut', (e) => {
+    if (!gridFocused()) return undefined;
+    if (store.readOnly) return store.emit('readonly');
+    if (copyRange(e)) clearRange();
+    return undefined;
+  });
+  document.addEventListener('paste', (e) => {
+    if (!gridFocused()) return;
+    e.preventDefault();
+    // The grid's own copy is only a fallback for browsers without clipboardData;
+    // a system clipboard holding non-text (an image, files) pastes nothing.
+    if (!e.clipboardData) return pasteText(clip);
+    const text = e.clipboardData.getData('text/plain');
+    if (text) pasteText(text);
+    else app.toast('The clipboard holds no text to paste.', 'info', 3000);
+    return undefined;
   });
 
   // ---- mouse ---------------------------------------------------------------
@@ -5013,6 +6373,7 @@ function createGrid(app, root) {
     if (e.detail > 1) return undefined;
     app.select(id, { extend: e.shiftKey, toggle: mod(e), col, keepCard: true });
     body.focus({ preventScroll: true });
+    ensureVisible(id, col);
     return undefined;
   });
 
@@ -5130,6 +6491,22 @@ function createGrid(app, root) {
   let drag = null;
   let autoScroll = 0;
   rowsEl.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || e.target.closest('.ed')) return;
+    if (e.target.closest('.fill-h')) {
+      e.preventDefault();
+      const g = range();
+      if (!g || store.readOnly) return;
+      fillDrag = { g, to: g.r2 };
+      body.classList.add('cell-drag');
+      return;
+    }
+    const cell = e.target.closest('[data-col]');
+    if (!cell || cell.classList.contains('c-num') || e.target.closest('[data-act], a[href]') || e.shiftKey || mod(e)) return;
+    const rowEl = cell.closest('.gr');
+    cellDrag = { id: Number(rowEl.dataset.id), col: cell.dataset.col, started: false, last: null };
+  });
+  rowsEl.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.fill-h')) return;
     const num = e.target.closest('.c-num');
     if (!num || e.button !== 0 || store.readOnly) return;
     hideTip();
@@ -5152,6 +6529,39 @@ function createGrid(app, root) {
     return { r, i, pos };
   }
   window.addEventListener('pointermove', (e) => {
+    if (fillDrag) {
+      edgeScroll(e);
+      const { r } = cellAt(e.clientX, e.clientY);
+      const to = Math.max(fillDrag.g.r2, r);
+      if (to === fillDrag.to) return;
+      fillDrag.to = to;
+      fillPreview = to > fillDrag.g.r2 ? { r1: fillDrag.g.r2 + 1, r2: to, c1: fillDrag.g.c1, c2: fillDrag.g.c2 } : null;
+      renderWindow(true);
+      return;
+    }
+    if (cellDrag) {
+      if (!(e.buttons & 1)) {
+        cellDrag = null;
+        return;
+      }
+      const { r, c } = cellAt(e.clientX, e.clientY);
+      const vis = store.d.visible;
+      const key = cols[c] ? cols[c].key : 'name';
+      const here = `${r}:${key}`;
+      if (!cellDrag.started) {
+        if (!vis[r] || (vis[r].id === cellDrag.id && (key === cellDrag.col || vis[r].kind === 'section'))) return;
+        cellDrag.started = true;
+        if (window.getSelection) window.getSelection().removeAllRanges();
+        body.classList.add('cell-drag');
+        app.select(cellDrag.id, { col: cellDrag.col, keepCard: true });
+        body.focus({ preventScroll: true });
+      }
+      edgeScroll(e);
+      if (here === cellDrag.last || !vis[r]) return;
+      cellDrag.last = here;
+      app.select(vis[r].id, { extend: true, col: key, keepCard: true });
+      return;
+    }
     if (!drag) return;
     if (!drag.started) {
       if (Math.abs(e.clientY - drag.y) + Math.abs(e.clientX - drag.x) < 6) return;
@@ -5185,8 +6595,34 @@ function createGrid(app, root) {
     autoScroll = e.clientY < sr.top + HEAD_H + 24 ? -1 : e.clientY > sr.bottom - 24 ? 1 : 0;
   });
   setInterval(() => {
-    if (drag && drag.started && autoScroll) scroll.scrollTop += autoScroll * 14;
+    const on = (drag && drag.started) || (cellDrag && cellDrag.started) || fillDrag;
+    if (!on) return;
+    if (autoScroll) scroll.scrollTop += autoScroll * 14;
+    if (autoScrollX && !drag) scroll.scrollLeft += autoScrollX * 14;
   }, 30);
+  function endCellDrag(cancel) {
+    body.classList.remove('cell-drag');
+    autoScroll = 0;
+    autoScrollX = 0;
+    if (fillDrag) {
+      const { g, to } = fillDrag;
+      fillDrag = null;
+      fillPreview = null;
+      suppressClick = true;
+      setTimeout(() => (suppressClick = false), 0);
+      if (cancel || to <= g.r2) return renderWindow(true);
+      return applyCells('Fill', fromCells(fillHandleTargets(g, to)), { r1: g.r1, c1: g.c1, r2: to, c2: g.c2 });
+    }
+    if (cellDrag) {
+      const started = cellDrag.started;
+      cellDrag = null;
+      if (started) {
+        suppressClick = true;
+        setTimeout(() => (suppressClick = false), 0);
+      }
+    }
+    return undefined;
+  }
   const endDrag = (e, cancel) => {
     if (!drag) return;
     const d = drag;
@@ -5212,10 +6648,17 @@ function createGrid(app, root) {
     });
     return undefined;
   };
-  window.addEventListener('pointerup', (e) => endDrag(e, false));
-  window.addEventListener('pointercancel', (e) => endDrag(e, true));
+  window.addEventListener('pointerup', (e) => {
+    endCellDrag(false);
+    endDrag(e, false);
+  });
+  window.addEventListener('pointercancel', (e) => {
+    endCellDrag(true);
+    endDrag(e, true);
+  });
   window.addEventListener('keydown', (e) => {
     if (drag && drag.started && e.key === 'Escape') endDrag(e, true);
+    if (fillDrag && e.key === 'Escape') endCellDrag(true);
   });
 
   // column resize
@@ -5262,6 +6705,10 @@ function createGrid(app, root) {
     renderWindow,
     startEdit,
     ensureVisible,
+    range,
+    pasteText,
+    fillDown,
+    clearRange,
     focus: () => body.focus({ preventScroll: true }),
     get scrollTop() {
       return scroll.scrollTop;
@@ -5504,6 +6951,7 @@ function createGantt(app, root) {
       showBaseline: s.showBaseline,
       labelMode: s.labelMode,
       selection: store.selection,
+      done: d.done,
       todayDay: app.todayDay(),
       interactive: !store.readOnly,
       prefix: 'g',
@@ -5964,7 +7412,7 @@ const __ui_card_card = (() => {
 const { escapeHtml: esc } = __util_escape;
 const { sanitizeHtml } = __util_sanitize;
 const { safeUrl } = __util_markdown;
-const { STATUSES, PRIORITIES } = __model_plan;
+const { statusNames, priorityNames } = __model_options;
 const { setTaskField, resolveRef, addLink, removeLink, setPredsFromText, predsText } = __model_edit;
 const { setFieldValue, findField, formatValue } = __model_fields;
 const { LINK_TYPES, LINK_LABELS } = __schedule_links;
@@ -6014,7 +7462,10 @@ function createCard(app, root) {
     onChange: (html, id) => store.commit('Edit description', (plan) => {
       const t = plan.rows.find((r) => r.id === id);
       if (!t) return false;
-      return setTaskField(t, 'descHtml', html) || undefined;
+      const rep = {};
+      sanitizeHtml(html, rep);
+      if (rep.truncated) setTimeout(() => app.toast('The description was too long and has been shortened. Undo restores the previous text.', 'warn', 8000));
+      return setTaskField(t, 'descHtml', html, undefined, plan) || undefined;
     }),
   });
 
@@ -6068,8 +7519,8 @@ ${fs('Start', `<input type="date" data-f="start" data-key="start" value="${t.sta
 ${fs('Finish', `<input type="date" data-f="finish" data-key="finish" value="${t.finish}"${dis(summary || t.milestone)}>`)}
 ${fs('Duration', `<input type="number" min="0" step="1" data-f="duration" data-key="duration" value="${t.duration}" title="Working days"${dis(summary)}>`, ' w-xs')}
 ${fs('Progress %', `<input type="number" min="0" max="100" step="5" data-f="progress" data-key="progress" value="${t.progress}"${dis(summary)}>`, ' w-xs')}
-${fs('Status', `<select data-f="status" data-key="status"${dis(summary)}>${opt(STATUSES, t.status)}</select>`)}
-${fs('Priority', `<select data-f="priority" data-key="priority"${dis()}>${opt(PRIORITIES, t.priority)}</select>`)}
+${fs('Status', `<select data-f="status" data-key="status"${dis(summary)}>${opt(statusNames(store.plan), t.status)}</select>`)}
+${fs('Priority', `<select data-f="priority" data-key="priority"${dis()}>${opt(priorityNames(store.plan), t.priority)}</select>`)}
 ${fs('Owner', `<input data-f="owner" data-key="owner" value="${esc(t.owner)}" list="dl-owners"${dis()}>`)}
 ${fs('Workstream', `<input data-f="workstream" data-key="workstream" value="${esc(t.workstream)}" list="dl-streams"${dis()}>`)}
 <label class="fs fs-chk"><span>Milestone</span><input type="checkbox" data-f="milestone" data-key="milestone"${t.milestone ? ' checked' : ''}${dis(summary)}></label>
@@ -6180,7 +7631,7 @@ ${ro ? '' : `<div class="pr-add-row"><input class="pr-add" data-key="pr-add" pla
       pin = prev && prev !== f ? prev : undefined;
       pinned.set(id, f);
     }
-    commitTask(`Edit ${f}`, (t) => setTaskField(t, f, v, pin) || undefined);
+    commitTask(`Edit ${f}`, (t) => setTaskField(t, f, v, pin, store.plan) || undefined);
     return undefined;
   });
 
@@ -6356,7 +7807,7 @@ return { createCard };
 // ---- ui/board/board.js
 const __ui_board_board = (() => {
 const { escapeHtml: esc } = __util_escape;
-const { STATUSES } = __model_plan;
+const { statusNames, optionColor } = __model_options;
 const { setTaskField } = __model_edit;
 const { isOverdue, statusDay } = __model_stats;
 const { fmtDate, statusSlug } = __ui_format;
@@ -6382,16 +7833,17 @@ function createBoard(app, root) {
     const year = toYMD(parseISO(store.plan.start))[0];
     const leaves = d.tree.tasks.filter((t) => !d.tree.isSummary(t.id) && (!d.matches || d.matches.has(t.id)));
     const ro = store.readOnly;
-    const cols = STATUSES.map((s) => {
+    const plan = store.plan;
+    const cols = statusNames(plan).map((s) => {
       const cards = leaves
         .filter((t) => t.status === s)
         .map((t) => {
           const sec = d.tree.byId.get(d.tree.sectionOf.get(t.id));
           const parent = d.tree.byId.get(d.tree.parent.get(t.id));
-          const od = isOverdue(t, day);
-          return `<article class="bcard${store.selection.has(t.id) ? ' sel' : ''}" draggable="${!ro}" tabindex="0" data-id="${t.id}" data-key="bc-${t.id}" style="--sec:${sec ? sec.color : 'var(--line)'}" aria-label="${esc(t.name)}, ${esc(s)}. Enter opens, Shift+Arrow moves.">
+          const od = isOverdue(t, day, plan);
+          return `<article class="bcard${store.selection.has(t.id) ? ' sel' : ''}${d.done.has(t.id) ? ' done' : ''}" draggable="${!ro}" tabindex="0" data-id="${t.id}" data-key="bc-${t.id}" style="--sec:${sec ? sec.color : 'var(--line)'}" aria-label="${esc(t.name)}, ${esc(s)}. Enter opens, Shift+Arrow moves.">
 <div class="bc-top"><span class="bc-num">${esc(d.tree.outline.get(t.id))}</span>${sec ? `<span class="bc-sec">${esc(sec.name)}</span>` : ''}${t.priority === 'High' || t.priority === 'Critical' ? `<span class="prio pr-${t.priority.toLowerCase()}">${t.priority}</span>` : ''}</div>
-<div class="bc-name">${t.milestone ? '<span class="ms-ic">◆</span> ' : ''}${esc(t.name)}</div>
+<div class="bc-name">${d.done.has(t.id) ? '<span class="done-ck" aria-label="Complete">✓</span> ' : ''}${t.milestone ? '<span class="ms-ic">◆</span> ' : ''}${esc(t.name)}</div>
 ${parent ? `<div class="bc-parent">${esc(parent.name)}</div>` : ''}
 ${firstLine(descText(t)) ? `<div class="bc-desc">${esc(firstLine(descText(t), 120))}</div>` : ''}
 <div class="bc-meta"><span>${esc(t.owner || 'Unassigned')}</span><span class="${od ? 'overdue-txt' : ''}">${od ? 'Overdue · ' : ''}${esc(fmtDate(t.finish, year))}</span></div>
@@ -6399,7 +7851,7 @@ ${firstLine(descText(t)) ? `<div class="bc-desc">${esc(firstLine(descText(t), 12
         })
         .join('');
       const n = leaves.filter((t) => t.status === s).length;
-      return `<section class="bcol" data-status="${esc(s)}" aria-label="${esc(s)} (${n})"><h3><span class="dot st-${statusSlug(s)}"></span>${esc(s)} <span class="cnt">${n}</span></h3><div class="bcards">${cards || '<p class="muted bc-empty">No tasks</p>'}</div></section>`;
+      return `<section class="bcol" data-status="${esc(s)}" aria-label="${esc(s)} (${n})"><h3><span class="dot st-${statusSlug(s)}" style="background:${optionColor(plan, 'status', s)}"></span>${esc(s)} <span class="cnt">${n}</span></h3><div class="bcards">${cards || '<p class="muted bc-empty">No tasks</p>'}</div></section>`;
     }).join('');
     preserveFocus(root, () => {
       root.innerHTML = `<div class="board">${cols}</div>`;
@@ -6407,7 +7859,7 @@ ${firstLine(descText(t)) ? `<div class="bc-desc">${esc(firstLine(descText(t), 12
   }
 
   const setStatus = (id, status) => {
-    store.commit('Change status', (plan) => setTaskField(plan.rows.find((r) => r.id === id), 'status', status) || undefined);
+    store.commit('Change status', (plan) => setTaskField(plan.rows.find((r) => r.id === id), 'status', status, undefined, plan) || undefined);
   };
 
   root.addEventListener('dragstart', (e) => {
@@ -6454,8 +7906,9 @@ ${firstLine(descText(t)) ? `<div class="bc-desc">${esc(firstLine(descText(t), 12
     } else if (e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
       e.preventDefault();
       const t = store.d.tree.byId.get(id);
-      const i = STATUSES.indexOf(t.status) + (e.key === 'ArrowRight' ? 1 : -1);
-      if (i >= 0 && i < STATUSES.length) setStatus(id, STATUSES[i]);
+      const names = statusNames(store.plan);
+      const i = names.indexOf(t.status) + (e.key === 'ArrowRight' ? 1 : -1);
+      if (i >= 0 && i < names.length) setStatus(id, names[i]);
     } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       const cards = [...c.closest('.bcards').querySelectorAll('.bcard')];
@@ -6726,11 +8179,13 @@ const __io_paste = (() => {
 const { MIN_YEAR, MAX_YEAR, fromYMD, toISO, parseISO, nextWorkday, prevWorkday, startFromDuration, durationFromDates, daysInMonth } = __schedule_calendar;
 const { parseLinkToken } = __schedule_links;
 const { computeTree, normalizeLevels } = __model_tree;
-const { createTask, createSection, STATUSES, PALETTE } = __model_plan;
+const { createTask, createSection, PALETTE } = __model_plan;
+const { statusNames, completeStatuses, matchOption, isComplete } = __model_options;
 const { fieldKey, fieldIdOfKey, coerceValue } = __model_fields;
 const { markdownToHtml } = __util_markdown;
 // Paste import: parse TSV/CSV copied from spreadsheets / planning tools,
 // auto-detect columns and date order, and turn it into plan rows. Pure.
+
 
 
 
@@ -6936,12 +8391,21 @@ function parseLevel(value, outlineMode) {
   return Math.max(0, +s - 1);
 }
 
-function matchStatus(v) {
+function matchStatus(v, plan) {
   const s = String(v || '').trim().toLowerCase();
   if (!s) return null;
-  if (s === 'completed' || s === 'complete') return 'Done';
-  if (s === 'late' || s === 'on hold') return 'Blocked';
-  return STATUSES.find((x) => x.toLowerCase() === s) || null;
+  const names = statusNames(plan);
+  const exact = matchOption(names, s);
+  if (exact) return exact;
+  if (s === 'completed' || s === 'complete' || s === 'done') return completeStatuses(plan)[0];
+  if (s === 'late' || s === 'on hold') return matchOption(names, 'Blocked');
+  return null;
+}
+
+function statusFromProgress(plan, progress) {
+  const names = statusNames(plan);
+  if (progress >= 100) return completeStatuses(plan)[0];
+  return progress > 0 ? matchOption(names, 'In progress') || names.find((n) => !isComplete(plan, n) && n !== names[0]) || names[0] : names[0];
 }
 
 /**
@@ -7021,7 +8485,7 @@ function importTable(plan, table, opts) {
     let progress = progressRaw ? Math.max(0, Math.min(100, Math.round(parseFloat(progressRaw.replace(',', '.'))))) : 0;
     if (Number.isNaN(progress)) progress = 0;
     if (progressRaw && /^0?[.,]\d+$/.test(progressRaw)) progress = Math.round(parseFloat(progressRaw.replace(',', '.')) * 100);
-    const status = matchStatus(get(r, 'status')) || (progress >= 100 ? 'Done' : progress > 0 ? 'In progress' : 'Not started');
+    const status = matchStatus(get(r, 'status'), plan) || statusFromProgress(plan, progress);
     const task = createTask(plan, {
       name: name.slice(0, 500),
       level,
@@ -7256,6 +8720,256 @@ async function openPasteImport(app, initialText = '') {
 return { openPasteImport };
 })();
 
+// ---- ui/dialogs/options.js
+const __ui_dialogs_options = (() => {
+const { modal } = __ui_dialogs_modal;
+const { escapeHtml: esc } = __util_escape;
+const { getOptionList, optionUsage, applyOptionList, OPTION_COLORS, MAX_LIST_OPTIONS } = __model_options;
+const { findField } = __model_fields;
+// "Edit options…" dialog for Status, Priority and custom single-select columns:
+// add, rename, reorder (drag or ↑/↓), delete (choosing where tasks move), a
+// colour per option and, for Status, "counts as complete".
+
+
+
+
+
+const TITLES = { status: 'Status', priority: 'Priority' };
+
+async function openOptionsEditor(app, target) {
+  const store = app.store;
+  if (store.readOnly) return store.emit('readonly');
+  const builtIn = target === 'status' || target === 'priority';
+  const field = builtIn ? null : findField(store.plan, target);
+  if (!builtIn && !field) return undefined;
+  const title = builtIn ? TITLES[target] : field.name;
+  const items = getOptionList(store.plan, target).map((o) => {
+    const x = typeof o === 'string' ? { name: o } : o;
+    return { from: x.name, name: x.name, color: x.color || '', complete: !!x.complete, deleted: false, moveTo: null, used: optionUsage(store.plan, target, x.name) };
+  });
+  let result = null;
+  let dragFrom = -1;
+
+  const rowHTML = (it, i) => {
+    if (it.deleted) {
+      const alive = items.filter((x) => !x.deleted && x.name.trim());
+      const choose = it.used
+        ? ` · move its ${it.used} task${it.used === 1 ? '' : 's'} to <select class="opt-move" data-i="${i}" aria-label="Move tasks using ${esc(it.from)} to">${builtIn ? '' : `<option value=""${it.moveTo === '' ? ' selected' : ''}>(no value)</option>`}<option value="" disabled${it.moveTo == null ? ' selected' : ''}>choose…</option>${alive.map((x) => `<option${x.name === it.moveTo ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>`
+        : '';
+      return `<li class="opt-row deleted" data-i="${i}"><span class="opt-gone">“${esc(it.from)}” will be deleted${choose}</span><button type="button" class="btn sm" data-a="undel" data-i="${i}">Keep</button></li>`;
+    }
+    return `<li class="opt-row" data-i="${i}" draggable="true">
+<span class="drag" title="Drag to reorder" aria-hidden="true">⋮⋮</span>
+${builtIn ? `<input type="color" class="opt-color" data-i="${i}" value="${esc(it.color || OPTION_COLORS[i % OPTION_COLORS.length])}" aria-label="Colour of ${esc(it.name)}">` : ''}
+<input class="opt-name" data-i="${i}" value="${esc(it.name)}" maxlength="${builtIn ? 60 : 100}" aria-label="Option name" placeholder="Option name">
+${target === 'status' ? `<label class="opt-done" title="Tasks with this status count as complete: green row, ✓, 100 %"><input type="checkbox" class="opt-cmp" data-i="${i}"${it.complete ? ' checked' : ''}> counts as complete</label>` : ''}
+<span class="opt-use muted">${it.used ? `${it.used} task${it.used === 1 ? '' : 's'}` : ''}</span>
+<button type="button" class="btn ic sm" data-a="up" data-i="${i}" aria-label="Move ${esc(it.name)} up" title="Move up"${i === 0 ? ' disabled' : ''}>↑</button>
+<button type="button" class="btn ic sm" data-a="down" data-i="${i}" aria-label="Move ${esc(it.name)} down" title="Move down"${i === items.length - 1 ? ' disabled' : ''}>↓</button>
+<button type="button" class="btn ic sm danger" data-a="del" data-i="${i}" aria-label="Delete ${esc(it.name)}" title="Delete">✕</button></li>`;
+  };
+
+  const r = await modal({
+    title: `Edit options: ${title}`,
+    wide: true,
+    body: `<p class="hint">Renaming updates every task that uses the option. Drag ⋮⋮ (or use ↑/↓) to reorder${builtIn ? '; the first option is the default for new tasks' : ''}.</p>
+<ul class="opt-list" aria-label="Options"></ul>
+<button type="button" class="btn sm opt-add" data-a="add">+ Add option</button>
+<p class="warn opt-err" aria-live="polite"></p>`,
+    actions: [{ label: 'Cancel', value: 'cancel' }, { label: 'Save options', value: 'ok', primary: true }],
+    onMount: (dlg) => {
+      const list = dlg.querySelector('.opt-list');
+      const err = dlg.querySelector('.opt-err');
+      const draw = (focusI, sel = '.opt-name') => {
+        list.innerHTML = items.map(rowHTML).join('');
+        if (focusI != null) {
+          const n = list.querySelector(`${sel}[data-i="${focusI}"]`) || list.querySelector(`[data-i="${focusI}"] .opt-name`);
+          if (n) n.focus();
+        }
+      };
+      const swap = (i, j) => {
+        if (j < 0 || j >= items.length) return;
+        [items[i], items[j]] = [items[j], items[i]];
+      };
+      list.addEventListener('input', (e) => {
+        const i = Number(e.target.dataset.i);
+        if (e.target.classList.contains('opt-name')) items[i].name = e.target.value;
+        if (e.target.classList.contains('opt-color')) items[i].color = e.target.value;
+      });
+      list.addEventListener('change', (e) => {
+        const i = Number(e.target.dataset.i);
+        if (e.target.classList.contains('opt-cmp')) items[i].complete = e.target.checked;
+        if (e.target.classList.contains('opt-move')) items[i].moveTo = e.target.value;
+        if (e.target.classList.contains('opt-name')) draw(); // refresh "move to" choices
+      });
+      dlg.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-a]');
+        if (!b) return;
+        const i = Number(b.dataset.i);
+        err.textContent = '';
+        if (b.dataset.a === 'add') {
+          if (items.filter((x) => !x.deleted).length >= MAX_LIST_OPTIONS) return void (err.textContent = `At most ${MAX_LIST_OPTIONS} options.`);
+          items.push({ from: null, name: '', color: OPTION_COLORS[items.length % OPTION_COLORS.length], complete: false, deleted: false, moveTo: null, used: 0 });
+          return draw(items.length - 1);
+        }
+        if (b.dataset.a === 'up' || b.dataset.a === 'down') {
+          const j = i + (b.dataset.a === 'up' ? -1 : 1);
+          swap(i, j);
+          return draw(j, `[data-a="${b.dataset.a}"]`);
+        }
+        if (b.dataset.a === 'del') {
+          if (items[i].from == null) items.splice(i, 1);
+          else items[i].deleted = true;
+          return draw();
+        }
+        if (b.dataset.a === 'undel') {
+          items[i].deleted = false;
+          items[i].moveTo = null;
+          return draw(i);
+        }
+        return undefined;
+      });
+      list.addEventListener('dragstart', (e) => {
+        const li = e.target.closest('.opt-row');
+        if (!li || e.target.closest('input')) return;
+        dragFrom = Number(li.dataset.i);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(dragFrom));
+        li.classList.add('dragging');
+      });
+      list.addEventListener('dragover', (e) => {
+        if (dragFrom < 0) return;
+        e.preventDefault();
+        list.querySelectorAll('.drop-before').forEach((n) => n.classList.remove('drop-before'));
+        const li = e.target.closest('.opt-row');
+        if (li) li.classList.add('drop-before');
+      });
+      list.addEventListener('drop', (e) => {
+        if (dragFrom < 0) return;
+        e.preventDefault();
+        const li = e.target.closest('.opt-row');
+        const to = li ? Number(li.dataset.i) : items.length - 1;
+        const [it] = items.splice(dragFrom, 1);
+        items.splice(to, 0, it);
+        dragFrom = -1;
+        draw();
+      });
+      list.addEventListener('dragend', () => {
+        dragFrom = -1;
+        draw();
+      });
+      draw();
+    },
+    onAction: (v, dlg) => {
+      let err = null;
+      store.commit(`Edit ${title} options`, (p) => {
+        const res = applyOptionList(p, target, items.map(({ from, name, color, complete, deleted, moveTo }) => ({ from, name, color, complete, deleted, moveTo })));
+        if (res.error) {
+          err = res.error;
+          return false;
+        }
+        result = res;
+        return undefined;
+      });
+      if (err) {
+        dlg.querySelector('.opt-err').textContent = err;
+        return false;
+      }
+      return true;
+    },
+  });
+  if (r.value === 'ok' && result) {
+    const parts = [];
+    if (result.renamed) parts.push(`${result.renamed} task${result.renamed === 1 ? '' : 's'} renamed`);
+    if (result.moved) parts.push(`${result.moved} moved`);
+    app.toast(`${title} options saved${parts.length ? ` (${parts.join(', ')})` : ''}.`);
+  }
+  return result;
+}
+return { openOptionsEditor };
+})();
+
+// ---- ui/dialogs/history.js
+const __ui_dialogs_history = (() => {
+const { modal } = __ui_dialogs_modal;
+const { escapeHtml: esc } = __util_escape;
+const { computeTree, isTask } = __model_tree;
+const { isComplete } = __model_options;
+const { fmtStamp } = __ui_format;
+// File › Version history: the versions embedded in the saved file, newest
+// first, with Preview (read-only overlay), Restore and Export JSON.
+
+
+
+
+
+
+/**
+ * o: { versions (oldest first), author, fileName, onAuthor(), onPreview(v), onRestore(v), onExport(v), readOnly }
+ */
+function openHistoryPanel(o) {
+  const list = [...o.versions].reverse();
+  const item = (v) => `<li class="vh-item">
+<div class="vh-h"><b>Version ${v.n}</b><span>${esc(fmtStamp(v.savedAt))}</span>${v.author ? `<span>· ${esc(v.author)}</span>` : ''}</div>
+<ul class="vh-ch">${(v.changes || []).map((c) => `<li>${esc(c)}</li>`).join('')}</ul>
+<div class="vh-act"><button type="button" class="btn sm" data-a="preview" data-n="${v.n}">Preview</button><button type="button" class="btn sm" data-a="restore" data-n="${v.n}"${o.readOnly ? ' disabled' : ''}>Restore</button><button type="button" class="btn sm" data-a="export" data-n="${v.n}">Export JSON</button></div></li>`;
+  return modal({
+    title: 'Version history',
+    wide: true,
+    body: `<p class="hint">Every Save adds a version to ${o.fileName ? `“${esc(o.fileName)}”` : 'the file'} (the last 50, at most 5 MB). Restoring is a normal edit: Undo brings the current plan back, Save keeps it.</p>
+<p class="vh-me">Your name on new versions: <b class="vh-name">${esc(o.author || '(not set)')}</b> <button type="button" class="btn sm" data-a="author">Change…</button></p>
+${list.length ? `<ol class="vh-list">${list.map(item).join('')}</ol>` : '<p class="muted">No versions yet. Each Save adds one.</p>'}`,
+    actions: [{ label: 'Close', value: 'cancel', primary: true }],
+    onMount: (dlg) => {
+      dlg.addEventListener('click', async (e) => {
+        const b = e.target.closest('[data-a]');
+        if (!b) return;
+        if (b.dataset.a === 'author') {
+          const name = await o.onAuthor();
+          if (name != null) dlg.querySelector('.vh-name').textContent = name || '(not set)';
+          return;
+        }
+        const v = o.versions.find((x) => x.n === Number(b.dataset.n));
+        if (!v) return;
+        if (b.dataset.a === 'preview') o.onPreview(v);
+        else if (b.dataset.a === 'export') o.onExport(v);
+        else if (b.dataset.a === 'restore' && (await o.onRestore(v))) dlg.close();
+      });
+    },
+  });
+}
+
+const dayMs = (iso) => Date.parse(`${iso}T00:00:00Z`) || 0;
+
+/** Read-only overlay of a version: outline table with mini timeline bars. Resolves 'restore' or 'cancel'. */
+async function previewVersion(plan, v, { readOnly = false } = {}) {
+  const tree = computeTree(plan.rows);
+  const tasks = plan.rows.filter(isTask);
+  const min = Math.min(...tasks.map((t) => dayMs(t.start)));
+  const max = Math.max(...tasks.map((t) => dayMs(t.finish) + 864e5));
+  const span = Math.max(864e5, max - min);
+  const rows = plan.rows.map((r) => {
+    if (!isTask(r)) return `<tr class="vp-sec" style="--sec:${esc(r.color || '#888')}"><td></td><td colspan="8">${esc(r.name)}</td></tr>`;
+    const done = isComplete(plan, r.status);
+    const left = tasks.length ? ((dayMs(r.start) - min) / span) * 100 : 0;
+    const width = r.milestone ? 0 : Math.max(0.6, ((dayMs(r.finish) + 864e5 - dayMs(r.start)) / span) * 100);
+    const bar = r.milestone
+      ? `<span class="vp-ms${done ? ' done' : ''}" style="left:${left.toFixed(2)}%"></span>`
+      : `<span class="vp-bar${done ? ' done' : ''}${tree.isSummary(r.id) ? ' sum' : ''}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%"></span>`;
+    return `<tr class="${done ? 'done' : ''}${tree.isSummary(r.id) ? ' sum' : ''}"><td class="muted">${esc(tree.outline.get(r.id) || '')}</td><td style="padding-left:${6 + r.level * 14}px">${done ? '<span class="done-ck">✓</span>' : ''}${esc(r.name)}</td><td>${esc(r.start)}</td><td>${esc(r.milestone ? '' : r.finish)}</td><td class="r">${r.milestone ? '0' : r.duration}d</td><td class="r">${r.progress}%</td><td>${esc(r.status)}</td><td>${esc(r.owner)}</td><td class="vp-tl">${bar}</td></tr>`;
+  });
+  const r = await modal({
+    title: `Preview: version ${v.n} · ${fmtStamp(v.savedAt)} (read-only)`,
+    wide: true,
+    body: `<p class="hint"><b>${esc(plan.name)}</b> · ${tasks.length} task${tasks.length === 1 ? '' : 's'}${v.author ? ` · saved by ${esc(v.author)}` : ''}</p>
+<div class="vp-wrap"><table class="vp"><thead><tr><th>#</th><th>Task</th><th>Start</th><th>Finish</th><th>Dur.</th><th>%</th><th>Status</th><th>Owner</th><th>Timeline</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`,
+    actions: [{ label: 'Close', value: 'cancel' }, ...(readOnly ? [] : [{ label: 'Restore this version', value: 'restore', primary: true }])],
+  });
+  return r.value;
+}
+return { openHistoryPanel, previewVersion };
+})();
+
 // ---- ui/gantt/export.js
 const __ui_gantt_export = (() => {
 const { renderGantt, GANTT_CSS, HEADER_H } = __ui_gantt_render;
@@ -7280,7 +8994,7 @@ function ganttSVG(app, { rowH = 26, nameW = 300 } = {}) {
   const s = store.plan.settings;
   const chart = renderGantt({
     rows: d.visible, tree: d.tree, range, ppd, rowH, header: true, indexOf: d.indexOf, sectionColor: d.sectionColor,
-    critical: d.critical, conflicts: d.conflictKeys, showBaseline: s.showBaseline, labelMode: s.labelMode,
+    critical: d.critical, done: d.done, conflicts: d.conflictKeys, showBaseline: s.showBaseline, labelMode: s.labelMode,
     todayDay: app.todayDay(), prefix: 'x',
   });
   const titleH = 34;
@@ -7381,7 +9095,7 @@ function buildPrint(app, root) {
     }
     const { svg } = renderGantt({
       rows, tree: d.tree, from, to, range, ppd, rowH: ROW_H, header: true, indexOf: d.indexOf, sectionColor: d.sectionColor,
-      critical: d.critical, conflicts: d.conflictKeys, showBaseline: plan.settings.showBaseline, labelMode: plan.settings.labelMode,
+      critical: d.critical, done: d.done, conflicts: d.conflictKeys, showBaseline: plan.settings.showBaseline, labelMode: plan.settings.labelMode,
       todayDay: app.todayDay(), prefix: `p${p}`,
     });
     out.push(`<section class="pp">
@@ -7404,14 +9118,16 @@ const { download, safeFilename, toast, isTyping, mod, isMac } = __ui_dom;
 const { createStore } = __ui_state;
 const { createStorage, defaultStore } = __io_storage;
 const { samplePlan } = __model_sample;
-const { createPlan, createTask, normalizePlan, parsePlanJSON, serializePlan, clonePlan, uid, nowStamp, saveBaseline, clearBaseline, PALETTE, STATUSES, PLAN_STATUSES } = __model_plan;
+const { createPlan, createTask, normalizePlan, parsePlanJSON, serializePlan, clonePlan, uid, nowStamp, saveBaseline, clearBaseline, PALETTE, PLAN_STATUSES } = __model_plan;
+const { statusNames } = __model_options;
 const { indent, outdent, deleteRows: removeRows, moveRows, isTask, descendants, ancestors } = __model_tree;
 const { insertTaskBelow, insertSectionBelow } = __model_edit;
 const { planStats } = __model_stats;
 const { today, isISODate, mondayOf, toISO } = __schedule_calendar;
 const { formatLag } = __schedule_links;
 const { toCSV } = __io_csv;
-const { embedPayload, extractPayload, resolveBoot, buildPayload } = __io_standalone;
+const { embedPayload, extractPayload, resolveBoot, buildPayload, payloadStamp } = __io_standalone;
+const { normHistory, makeVersion, appendVersion, mergeHistories, decodeSnapshot, replacePlanContents } = __io_versions;
 const { createFileSaver, createHandleRegistry, initialSaveState, saveReducer, hasUnsaved, saveStatusText, suggestedFileName } = __io_filesave;
 const { idbKV } = __io_idb;
 const { escapeHtml: esc } = __util_escape;
@@ -7424,6 +9140,8 @@ const { createLogs } = __ui_logs_logs;
 const { modal, confirmBox, promptBox } = __ui_dialogs_modal;
 const { openMenu, openPalette, closeMenu, isMenuOpen } = __ui_dialogs_menu;
 const { openPasteImport } = __ui_dialogs_paste;
+const { openOptionsEditor } = __ui_dialogs_options;
+const { openHistoryPanel, previewVersion } = __ui_dialogs_history;
 const { exportGanttPNG } = __ui_gantt_export;
 const { buildPrint, clearPrint } = __ui_print;
 const { columnState, columnLabel, columnOrder, moveColumn, moveColumnTo, setColumnVisible, resetColumns } = __ui_grid_columns;
@@ -7431,6 +9149,10 @@ const { FIELD_TYPES, fieldKey, findField, addField, renameField, setFieldOptions
 const { fmtDateLong, fmtStamp } = __ui_format;
 // App shell: layout, header, toolbar, menus, plan management, import/export,
 // global shortcuts. Views (grid, gantt, card, board, logs) live in their own modules.
+
+
+
+
 
 
 
@@ -7498,7 +9220,7 @@ function layoutHTML() {
     <button type="button" class="btn plan-only" data-act="add-section" title="New section (Shift+Insert)">+ Section</button>
     <button type="button" class="btn ic plan-only" data-act="outdent" aria-label="Outdent" title="Outdent (Shift+Tab)">⇤</button>
     <button type="button" class="btn ic plan-only" data-act="indent" aria-label="Indent" title="Indent (Tab)">⇥</button>
-    <button type="button" class="btn ic plan-only" data-act="delete" aria-label="Delete selected rows" title="Delete selected rows (Delete)">✕</button>
+    <button type="button" class="btn ic plan-only" data-act="delete" aria-label="Delete selected rows" title="Delete selected rows (${K}+Delete, or Delete on the # column)">✕</button>
     <button type="button" class="btn ic" data-act="undo" aria-label="Undo" title="Undo (${K}+Z)">↶</button>
     <button type="button" class="btn ic" data-act="redo" aria-label="Redo" title="Redo (Shift+${K}+Z)">↷</button>
   </div>
@@ -7520,6 +9242,7 @@ function layoutHTML() {
     <select data-filter="status" aria-label="Filter by status"></select>
     <select data-filter="section" aria-label="Filter by section"></select>
     <button type="button" class="btn" data-act="f-overdue" aria-pressed="false" title="Only overdue tasks">Overdue</button>
+    <button type="button" class="btn" data-act="f-done" aria-pressed="false" title="Hide tasks whose status counts as complete">Hide completed</button>
     <button type="button" class="btn ic" data-act="f-clear" aria-label="Clear filters" title="Clear filters">⌫</button>
   </div>
 </div>
@@ -7569,12 +9292,14 @@ function boot(sourceHtml) {
   // A file with an embedded plan opens that plan, unless this browser holds newer
   // saved edits of the same plan (see resolveBoot).
   let opened = null;
+  let bootHistory = [];
   const fileReport = {};
   try {
     const payload = JSON.parse(document.getElementById('pb-data').textContent || 'null');
     if (payload && payload.plan) {
       const filePlan = normalizePlan(payload.plan, fileReport);
       opened = resolveBoot({ ...payload, plan: filePlan }, storage.load(filePlan.id));
+      bootHistory = normHistory(payload.history);
     }
   } catch (e) {
     opened = null;
@@ -7629,7 +9354,9 @@ function boot(sourceHtml) {
       store.selection = new Set([id]);
       store.anchor = id;
     }
+    const prev = store.active;
     store.active = { id, col: o.col || (store.active && store.active.col) || 'name' };
+    if (!o.extend || !store.cellAnchor) store.cellAnchor = o.extend && prev ? { ...prev } : { ...store.active };
     const r = d.tree.byId.get(id);
     if (o.keepCard && store.cardId != null && r && isTask(r)) store.cardId = id;
     store.ui();
@@ -8004,6 +9731,7 @@ function boot(sourceHtml) {
     href: location.href,
     download: (name, html) => download(name, html, 'text/html;charset=utf-8'),
     confirm: confirmOverwrite,
+    explain: explainConnect,
   });
   let fileState = initialSaveState(!!opened && opened.source === 'saved');
   const fileStampFor = (id) => (opened && opened.file.plan.id === id ? opened.file.stamp : null);
@@ -8026,20 +9754,66 @@ function boot(sourceHtml) {
     return r.value;
   }
 
+  async function explainConnect() {
+    const fileName = suggestedFileName(location.href, '');
+    const r = await modal({
+      title: 'Connect Save to this file',
+      body: `<p><b>Pick this same file once so Save can write to it from now on.</b></p><p>Browsers cannot write to a page's own file without your permission. In the next dialog choose ${fileName ? `“${esc(fileName)}” (already filled in)` : 'the .html file you opened'} and confirm replacing it.</p><p class="hint">Edge / Chrome may offer “Allow on every visit”: choose it and Save never asks again. File › Open & connect file… does the same from an Open dialog.</p>`,
+      actions: [{ label: 'Cancel', value: 'cancel' }, { label: 'Pick the file…', value: 'ok', primary: true }],
+    });
+    return r.value === 'ok';
+  }
+
+  // ---- version history embedded in the file -------------------------------
+  const plainPlan = (p) => JSON.parse(serializePlan(p, false));
+  const histories = new Map(); // plan id -> { list (oldest first), base: plan as last saved / opened }
+  function historyFor(id) {
+    if (!histories.has(id)) {
+      const mine = opened && opened.file.plan.id === id;
+      histories.set(id, { list: mine ? bootHistory : [], base: mine ? plainPlan(opened.file.plan) : null });
+    }
+    return histories.get(id);
+  }
+  async function askAuthor(force = false) {
+    const cur = storage.prefs().author;
+    if (cur != null && !force) return cur;
+    const name = await promptBox('Your name for the version history', 'Name (optional, kept in this browser)', cur || '');
+    if (name == null && !force) storage.setPrefs({ author: '' });
+    if (name == null) return force ? null : '';
+    const v = name.trim().slice(0, 80);
+    storage.setPrefs({ author: v });
+    return v;
+  }
+
   async function saveToFile(saveAs = false) {
     if (store.readOnly) return store.emit('readonly');
     if (fileState.status === 'saving') return undefined;
     store.flush();
     const planId = store.plan.id;
-    const stamp = new Date().toISOString();
-    const html = embedPayload(sourceHtml, buildPayload(store.plan, { at: stamp }));
     const name = safeFilename(store.plan.name, 'html');
+    const author = await askAuthor();
+    if (store.plan.id !== planId || fileState.status === 'saving') return undefined;
     setFileState({ type: 'start' });
+    const stamp = new Date().toISOString();
+    const hist = historyFor(planId);
+    const data = plainPlan(store.plan);
     let r;
+    let list = hist.list;
+    // Called by the saver once it knows the target file: versions that exist
+    // only on disk are merged in, and the file and the version share `data`.
+    const render = async (disk) => {
+      const base = disk ? mergeHistories(hist.list, normHistory(disk.history)) : hist.list;
+      list = appendVersion(base, await makeVersion(base, data, hist.base, { author, at: stamp }));
+      return embedPayload(sourceHtml, buildPayload(data, { at: stamp, history: list }));
+    };
     try {
-      r = await saver.save({ planId, html, stamp, saveAs, suggestedName: suggestedFileName(location.href, name), downloadName: name });
+      r = await saver.save({ planId, html: render, stamp, saveAs, suggestedName: suggestedFileName(location.href, name), downloadName: name });
     } catch (e) {
       r = { status: 'failed', error: (e && e.message) || String(e) };
+    }
+    if (r.status === 'saved' || r.status === 'downloaded') {
+      hist.list = list;
+      hist.base = data;
     }
     if (store.plan.id !== planId) return undefined;
     if (r.status === 'saved') {
@@ -8054,6 +9828,84 @@ function boot(sourceHtml) {
       toast(`Could not save${r.name ? ` “${r.name}”` : ''}: ${r.error}. Try File → Save as…`, 'error', 8000);
     }
     return undefined;
+  }
+
+  async function openAndConnect() {
+    if (store.readOnly) return store.emit('readonly');
+    if (typeof window.showOpenFilePicker !== 'function') return toast('This browser cannot write to files: use Edge or Chrome. Save downloads an updated copy instead.', 'warn', 7000);
+    let h;
+    try {
+      [h] = await window.showOpenFilePicker({ types: [{ description: 'Planboard plan (HTML)', accept: { 'text/html': ['.html', '.htm'] } }], multiple: false, id: 'planboard' });
+    } catch (e) {
+      if (e && e.name === 'AbortError') return undefined;
+      return toast(`Could not open the file: ${(e && e.message) || e}`, 'error');
+    }
+    try {
+      if (typeof h.requestPermission === 'function' && (await h.requestPermission({ mode: 'readwrite' })) === 'denied') return toast('Write permission was not granted, so Save cannot write to that file.', 'warn', 7000);
+    } catch (e) {
+      /* asked again on the next Save */
+    }
+    let payload = null;
+    let text = '';
+    try {
+      text = await (await h.getFile()).text();
+      payload = extractPayload(text);
+    } catch (e) {
+      return toast(`Could not read “${h.name}”.`, 'error');
+    }
+    if (!payload || !payload.plan) return toast(`“${h.name}” is not a saved planboard file.`, 'error', 6000);
+    if (payload.plan.id !== store.plan.id) {
+      if (await confirmBox(`“${h.name}” holds a different plan (“${payload.plan.name || 'untitled'}”). Open it as a plan in this browser? Save then writes to the file you are viewing, not to “${h.name}”.`, { ok: 'Open plan' })) importText(text, h.name);
+      return undefined;
+    }
+    const hist = historyFor(store.plan.id);
+    hist.list = mergeHistories(hist.list, normHistory(payload.history));
+    await saver.connect(store.plan.id, h, payloadStamp(payload));
+    updateSaveState();
+    toast(`Connected to “${h.name}”. Save (${K}+S) now writes to it without asking.`, 'info', 5000);
+    return undefined;
+  }
+
+  const snapshotPlan = async (v) => {
+    try {
+      return normalizePlan(await decodeSnapshot(v.snapshot));
+    } catch (e) {
+      toast(`Cannot open version ${v.n}: ${e.message}`, 'error');
+      return null;
+    }
+  };
+  async function restoreVersion(v) {
+    if (store.readOnly) return store.emit('readonly') && false;
+    const p = await snapshotPlan(v);
+    if (!p) return false;
+    const ok = await confirmBox(`Restore version ${v.n} (${fmtStamp(v.savedAt)})? It becomes the current plan as a new unsaved change: Undo (${K}+Z) brings back what you have now, Save keeps it.`, { ok: 'Restore', title: 'Restore version' });
+    if (!ok) return false;
+    store.commit(`Restore version ${v.n}`, (cur) => {
+      replacePlanContents(cur, p);
+    });
+    toast(`Restored version ${v.n}. Press Save to keep it, or Undo.`, 'info', 6000);
+    return true;
+  }
+  function versionHistory() {
+    const hist = historyFor(store.plan.id);
+    openHistoryPanel({
+      versions: hist.list,
+      author: storage.prefs().author || '',
+      fileName: saver.fileName || suggestedFileName(location.href, ''),
+      readOnly: store.readOnly,
+      onAuthor: () => askAuthor(true),
+      onPreview: async (v) => {
+        const p = await snapshotPlan(v);
+        if (p && (await previewVersion(p, v, { readOnly: store.readOnly })) === 'restore') {
+          if (await restoreVersion(v)) document.querySelectorAll('dialog.modal[open]').forEach((d) => d.close());
+        }
+      },
+      onRestore: restoreVersion,
+      onExport: async (v) => {
+        const p = await snapshotPlan(v);
+        if (p) download(safeFilename(`${p.name} v${v.n}`, 'json'), serializePlan(p), 'application/json');
+      },
+    });
   }
 
   function showBanner(text) {
@@ -8107,6 +9959,8 @@ function boot(sourceHtml) {
         { label: 'Duplicate plan', action: duplicatePlan },
         { label: 'Rename plan…', action: renamePlan },
         { label: 'Delete plan…', danger: true, action: deletePlan },
+        { label: 'Status options…', action: () => openOptionsEditor(app, 'status') },
+        { label: 'Priority options…', action: () => openOptionsEditor(app, 'priority') },
         { sep: true },
         { heading: 'Import' },
         { label: 'Import JSON file…', hint: 'or drop a file', action: pickFile },
@@ -8115,7 +9969,11 @@ function boot(sourceHtml) {
       );
     }
     items.push({ heading: 'Export' });
-    if (!ro) items.push({ label: 'Save', hint: `${K}+S`, action: () => saveToFile(false) }, { label: 'Save as…', hint: `Shift+${K}+S`, action: () => saveToFile(true) });
+    if (!ro) {
+      items.push({ label: 'Save', hint: `${K}+S`, action: () => saveToFile(false) }, { label: 'Save as…', hint: `Shift+${K}+S`, action: () => saveToFile(true) });
+      items.push({ label: saver.connected ? `Open & connect file… (connected: ${saver.fileName})` : 'Open & connect file…', action: openAndConnect });
+    }
+    items.push({ label: 'Version history…', action: versionHistory });
     items.push(
       { label: 'Export JSON', action: exportJSON },
       { label: 'Export CSV', action: exportCSV },
@@ -8202,10 +10060,11 @@ function boot(sourceHtml) {
         items.push({ label: 'Move right', action: () => colCommit('Move column', (pl) => moveColumn(pl, c.key, 1)) });
         items.push({ label: 'Hide column', action: () => colCommit('Hide column', (pl) => (setColumnVisible(pl, c.key, false), true)) });
       }
+      if (c.key === 'status' || c.key === 'priority') items.push({ label: 'Edit options…', disabled: ro, action: () => openOptionsEditor(app, c.key) });
       if (c.field) {
         items.push({ label: 'Filter by value…', action: () => fieldFilterMenu(anchor, c.field) });
         items.push({ label: 'Rename…', disabled: ro, action: () => renameFieldUI(c.field) });
-        if (c.field.type === 'select') items.push({ label: 'Edit options…', disabled: ro, action: () => optionsUI(c.field) });
+        if (c.field.type === 'select') items.push({ label: 'Edit options…', disabled: ro, action: () => openOptionsEditor(app, c.field.id) });
         items.push({ label: 'Delete column…', danger: true, disabled: ro, action: () => deleteFieldUI(c.field) });
       }
       items.push({ sep: true });
@@ -8304,26 +10163,6 @@ ${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x)
     store.commit('Rename column', (p) => renameField(p, f.id, name) || undefined, { schedule: false });
   }
 
-  async function optionsUI(f) {
-    await modal({
-      title: `Options for “${f.name}”`,
-      body: `<label class="fld">Options (one per line)<textarea class="cf-opts" rows="8" maxlength="5000">${esc(f.options.join('\n'))}</textarea></label><p class="hint">Tasks using an option you remove lose that value (Undo restores it).</p><p class="warn cf-err" aria-live="polite"></p>`,
-      actions: [{ label: 'Cancel', value: 'cancel' }, { label: 'Save options', value: 'ok', primary: true }],
-      onAction: (v, dlg) => {
-        let err = null;
-        store.commit('Edit options', (p) => {
-          err = setFieldOptions(p, f.id, dlg.querySelector('.cf-opts').value.split('\n'));
-          return err ? false : undefined;
-        }, { schedule: false });
-        if (err) {
-          dlg.querySelector('.cf-err').textContent = err;
-          return false;
-        }
-        return true;
-      },
-    });
-  }
-
   async function deleteFieldUI(f) {
     const n = store.plan.rows.filter((r) => r.values && r.values[f.id] != null).length;
     const ok = await confirmBox(`Delete the column “${f.name}”?${n ? ` Its value on ${n} task${n === 1 ? '' : 's'} will be removed.` : ''} You can undo this (${K}+Z).`, { ok: 'Delete column', danger: true, title: 'Delete column' });
@@ -8403,7 +10242,7 @@ ${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x)
             const i = ord.indexOf(k);
             colCommit('Move column', (pl) => moveColumnTo(pl, k, mc === 'left' ? ord[i - 1] : ord[i + 2] ?? null));
           } else if (mc === 'rename' && f) await renameFieldUI(f);
-          else if (mc === 'opts' && f) await optionsUI(f);
+          else if (mc === 'opts' && f) await openOptionsEditor(app, f.id);
           else if (mc === 'del' && f) await deleteFieldUI(f);
           else if (mc === 'add') await addFieldUI(null);
           refresh(`[data-mc="${mc}"]${k ? `[data-k="${k}"]` : ''}`);
@@ -8496,7 +10335,7 @@ ${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x)
     store.ui(true);
   }
   function clearFilters() {
-    store.filter = { text: '', owner: '', status: '', section: '', overdue: false, field: null };
+    store.filter = { text: '', owner: '', status: '', section: '', overdue: false, hideDone: false, field: null };
     search.value = '';
     store.ui(true);
   }
@@ -8521,7 +10360,9 @@ ${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x)
 
   function showHelp() {
     const rows = [
-      ['↑ ↓ ← →', 'Move between cells (Shift+↑/↓ extends the selection)'],
+      ['↑ ↓ ← →', 'Move between cells; the grid scrolls to keep the cell in view. Shift+arrows (or Shift+click, or drag across cells) selects a range'],
+      [`${K}+C / ${K}+V / ${K}+X`, 'Copy / paste / cut cells as tab-separated text (works with Excel and Sheets). One copied value fills the whole selected range'],
+      [`${K}+D`, 'Fill down from the top cell of the range (or drag the small square at its bottom-right corner)'],
       ['Double-click', 'Edit a cell (read-only cells open the task details)'],
       ['↗ / Enter', 'Open task details from the task name (Enter on other cells edits them; Shift+Enter always opens)'],
       ['F2', 'Edit the selected cell'],
@@ -8530,7 +10371,7 @@ ${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x)
       ['Esc', 'Cancel editing / close the card. Press again to let Tab leave the grid'],
       ['Tab / Shift+Tab', 'Indent / outdent the selected tasks'],
       [`Insert or ${K}+Enter`, 'New task below; Shift+Insert = new section'],
-      ['Delete', 'Delete the selected rows (asks first)'],
+      ['Delete / Backspace', 'Clear the selected cells. On the # column, or with Ctrl, delete the selected rows (asks first)'],
       ['Alt+Shift+↑/↓', 'Move rows up / down'],
       ['Alt+← / Alt+→ or Space', 'Collapse / expand a summary task or section'],
       [`${K}+Z / Shift+${K}+Z`, 'Undo / redo (also Ctrl+Y)'],
@@ -8547,7 +10388,7 @@ ${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x)
     modal({
       title: 'Keyboard shortcuts & tips',
       wide: true,
-      body: `<table class="kbd-table">${rows.map(([k, v]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(v)}</td></tr>`).join('')}</table><h3 class="help-h">How to share</h3><ol class="help-share"><li>Put this .html file on OneDrive, Teams or SharePoint (or any shared folder).</li><li>Open it in Edge or Chrome, for example from the synced OneDrive folder.</li><li>Edit, then press <b>Save</b> (${esc(K)}+S). The first time, pick the original file to overwrite it; after that Save writes straight to it.</li><li>In Safari or Firefox, Save downloads an updated copy: replace the original file with it.</li></ol><p class="hint">Edits are also autosaved in this browser (localStorage) as a safety net. Export JSON for backups; File → Export read-only presenter copy makes a version others cannot edit.</p>`,
+      body: `<table class="kbd-table">${rows.map(([k, v]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(v)}</td></tr>`).join('')}</table><h3 class="help-h">How to share</h3><ol class="help-share"><li>Put this .html file on OneDrive, Teams or SharePoint (or any shared folder).</li><li>Open it in Edge or Chrome, for example from the synced OneDrive folder.</li><li>Edit, then press <b>Save</b> (${esc(K)}+S). The first time, pick the original file once (or use File › Open & connect file…); after that Save writes straight to it. Every Save adds a version to File › Version history.</li><li>In Safari or Firefox, Save downloads an updated copy: replace the original file with it.</li></ol><p class="hint">Edits are also autosaved in this browser (localStorage) as a safety net. Export JSON for backups; File → Export read-only presenter copy makes a version others cannot edit.</p>`,
       actions: [{ label: 'Close', value: 'cancel', primary: true }],
     });
   }
@@ -8587,6 +10428,7 @@ ${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x)
     columns: columnsMenu,
     conflicts: conflictsMenu,
     'f-overdue': () => setFilter('overdue', !store.filter.overdue),
+    'f-done': () => setFilter('hideDone', !store.filter.hideDone),
     'f-clear': clearFilters,
     file: fileMenu,
     plans: plansMenu,
@@ -8733,6 +10575,7 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
     pressed('auto', s.autoSchedule);
     pressed('critical', s.showCritical);
     pressed('f-overdue', store.filter.overdue);
+    pressed('f-done', store.filter.hideDone);
     pressed('present', store.presenter);
     const act = store.active && store.selection.size === 1 ? store.d.tree.byId.get(store.active.id) : null;
     q('.tb-open').hidden = !act || !isTask(act) || store.cardId === act.id;
@@ -8744,7 +10587,7 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
     root.querySelectorAll('[data-set]').forEach((sel) => setVal(sel, s[sel.dataset.set]));
     const tasks = store.d.tree.tasks;
     fillSelect(q('[data-filter="owner"]'), [...new Set(tasks.map((t) => t.owner).filter(Boolean))].sort().map((o) => [o, o]), 'All owners');
-    fillSelect(q('[data-filter="status"]'), STATUSES.map((x) => [x, x]), 'All statuses');
+    fillSelect(q('[data-filter="status"]'), statusNames(store.plan).map((x) => [x, x]), 'All statuses');
     fillSelect(q('[data-filter="section"]'), store.plan.rows.filter((r) => !isTask(r)).map((r) => [String(r.id), r.name]), 'All sections');
     if (document.activeElement !== search) search.value = store.filter.text;
     q('.filters').classList.toggle('active', !!store.d.matches);

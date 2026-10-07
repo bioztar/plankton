@@ -144,8 +144,12 @@ async function ensurePermission(h) {
 const PICKER_TYPES = [{ description: 'Planboard plan (HTML)', accept: { 'text/html': ['.html', '.htm'] } }];
 
 /**
- * env: { showSaveFilePicker (null when unsupported), registry, href, download(name, text), confirm(conflict) -> 'overwrite'|'saveas'|'cancel' }
- * save() resolves { status: 'saved'|'downloaded'|'cancelled'|'failed', name?, reason?, error? }.
+ * env: { showSaveFilePicker (null when unsupported), registry, href, download(name, text),
+ *        confirm(conflict) -> 'overwrite'|'saveas'|'cancel',
+ *        explain() -> true to continue (optional; shown before the one-time picker of a plain Save) }
+ * save() resolves { status: 'saved'|'downloaded'|'cancelled'|'failed', name?, reason?, error?, picked? }.
+ * A remembered handle is written silently; permission "prompt" asks via requestPermission
+ * (a small allow prompt, not a picker). Only a Save without any handle, or Save as, opens the picker.
  */
 export function createFileSaver(env) {
   const supported = typeof env.showSaveFilePicker === 'function';
@@ -154,15 +158,34 @@ export function createFileSaver(env) {
   let known = new Set();
   let ready = Promise.resolve();
 
-  const fallback = (o, reason) => {
-    env.download(o.downloadName, o.html);
+  // o.html may be a function (diskPayload | null) => html, called once with the
+  // same plan's payload read from the target file (to merge its history).
+  const render = async (o, disk = null) => (typeof o.html === 'function' ? o.html(disk) : o.html);
+  const fallback = async (o, reason) => {
+    env.download(o.downloadName, await render(o));
     return { status: 'downloaded', name: o.downloadName, reason };
+  };
+  const samePlan = (text, id) => {
+    const p = text ? extractPayload(text) : null;
+    return p && p.plan && p.plan.id === id ? p : null;
   };
 
   return {
     supported,
     get fileName() {
       return handle ? handle.name : '';
+    },
+    get connected() {
+      return !!handle;
+    },
+    /** Remember `h` (e.g. from File › Open & connect file…) as the file of the bound plan. */
+    async connect(id, h, stamp) {
+      await ready;
+      if (id !== planId) return false;
+      handle = h;
+      if (stamp) known.add(stamp);
+      await env.registry.put(id, env.href, h, stamp);
+      return true;
     },
     /** Point at a plan: loads its remembered handle. `openedStamp` = stamp of the file payload shown. */
     bind(id, openedStamp) {
@@ -182,6 +205,7 @@ export function createFileSaver(env) {
       if (!supported) return fallback(o, 'unsupported');
       await ready;
       let h = o.saveAs || o.planId !== planId ? null : handle;
+      let disk = null;
       if (h) {
         if ((await ensurePermission(h)) !== 'granted') return fallback(o, 'denied');
         let text = null;
@@ -199,18 +223,28 @@ export function createFileSaver(env) {
           if (choice === 'saveas') h = null;
           else if (choice !== 'overwrite') return { status: 'cancelled' };
         }
+        if (h) disk = samePlan(text, o.planId);
       }
+      let picked = false;
       if (!h) {
+        if (!o.saveAs && env.explain && !(await env.explain())) return { status: 'cancelled' };
+        picked = true;
         try {
           h = await env.showSaveFilePicker({ suggestedName: o.suggestedName, types: PICKER_TYPES, id: 'planboard' });
         } catch (e) {
           if (e && e.name === 'AbortError') return { status: 'cancelled' };
           return fallback(o, 'picker');
         }
+        try {
+          disk = samePlan(await (await h.getFile()).text(), o.planId);
+        } catch (e) {
+          /* new or unreadable file: nothing to merge */
+        }
       }
+      const html = await render(o, disk);
       try {
         const w = await h.createWritable();
-        await w.write(o.html);
+        await w.write(html);
         await w.close();
       } catch (e) {
         if (e && e.name === 'NotAllowedError') return fallback(o, 'denied');
@@ -221,7 +255,7 @@ export function createFileSaver(env) {
         known.add(o.stamp);
       }
       await env.registry.put(o.planId, env.href, h, o.stamp);
-      return { status: 'saved', name: h.name };
+      return { status: 'saved', name: h.name, picked };
     },
   };
 }

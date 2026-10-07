@@ -49,3 +49,38 @@ dialog::backdrop { background: rgba(10, 15, 25, 0.45); }
 .mc-acts { display: flex; gap: 4px; }
 .cf-err:empty { display: none; }
 .m-body .fld textarea { width: 100%; }
+/* Edit options */
+.opt-list { list-style: none; margin: 0 0 10px; padding: 0; border: 1px solid var(--line); border-radius: 8px; max-height: 55vh; overflow: auto; }
+.opt-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+.opt-row:last-child { border-bottom: 0; }
+.opt-row .drag { cursor: grab; color: var(--muted); }
+.opt-row.dragging { opacity: 0.45; }
+.opt-row.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.opt-row.deleted { background: var(--panel); color: var(--muted); }
+.opt-name { flex: 1; min-width: 120px; }
+.opt-color { width: 34px; height: 26px; padding: 0 2px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg); }
+.opt-done { display: flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 12px; }
+.opt-use { min-width: 56px; font-size: 12px; text-align: right; }
+.opt-gone { flex: 1; }
+/* Version history */
+.vh-list { list-style: none; margin: 0; padding: 0; max-height: 60vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.vh-item { padding: 8px 10px; border-bottom: 1px solid var(--grid); }
+.vh-item:last-child { border-bottom: 0; }
+.vh-h { display: flex; gap: 8px; align-items: baseline; }
+.vh-h span { color: var(--muted); font-size: 12px; }
+.vh-ch { margin: 4px 0 6px; padding-left: 18px; font-size: 12px; }
+.vh-act { display: flex; gap: 6px; }
+.vp-wrap { max-height: 65vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.vp { border-collapse: collapse; width: 100%; font-size: 12px; }
+.vp th, .vp td { padding: 3px 6px; border-bottom: 1px solid var(--grid); text-align: left; white-space: nowrap; }
+.vp th { position: sticky; top: 0; background: var(--panel); }
+.vp td.r { text-align: right; }
+.vp tr.sum td { font-weight: 700; }
+.vp tr.done td { background: var(--done-row); }
+.vp-sec td { font-weight: 700; background: color-mix(in srgb, var(--sec) 18%, transparent); }
+.vp-tl { position: relative; min-width: 220px; }
+.vp-bar { position: absolute; top: 6px; height: 9px; border-radius: 3px; background: var(--bar); }
+.vp-bar.sum { background: var(--summary); height: 5px; top: 8px; }
+.vp-bar.done { background: var(--done-bar); }
+.vp-ms { position: absolute; top: 5px; width: 10px; height: 10px; margin-left: -5px; transform: rotate(45deg); background: var(--milestone); }
+.vp-ms.done { background: var(--done-bar); }

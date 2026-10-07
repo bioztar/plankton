@@ -20,14 +20,15 @@ export function extractPayload(html) {
 }
 
 /**
- * The JSON embedded in a saved file. Saves are editable; only `presenter: true`
+ * The JSON embedded in a saved file; `history` = embedded versions (see versions.js). Saves are editable; only `presenter: true`
  * (Export read-only presenter copy) produces a read-only file, marked mode:'presenter'.
  */
-export function buildPayload(plan, { presenter = false, at = new Date().toISOString() } = {}) {
+export function buildPayload(plan, { presenter = false, at = new Date().toISOString(), history = null } = {}) {
   const data = JSON.parse(serializePlan(plan, false));
-  return presenter
-    ? { app: 'planboard', mode: 'presenter', readOnly: true, presenter: true, exportedAt: at, plan: data }
-    : { app: 'planboard', mode: 'edit', readOnly: false, presenter: false, savedAt: at, plan: data };
+  if (presenter) return { app: 'planboard', mode: 'presenter', readOnly: true, presenter: true, exportedAt: at, plan: data };
+  const out = { app: 'planboard', mode: 'edit', readOnly: false, presenter: false, savedAt: at, plan: data };
+  if (history && history.length) out.history = history;
+  return out;
 }
 
 /** Only explicit presenter copies open read-only; v1 "standalone copies" (no mode) open editable. */

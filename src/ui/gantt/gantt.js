@@ -85,6 +85,7 @@ export function createGantt(app, root) {
       showBaseline: s.showBaseline,
       labelMode: s.labelMode,
       selection: store.selection,
+      done: d.done,
       todayDay: app.todayDay(),
       interactive: !store.readOnly,
       prefix: 'g',

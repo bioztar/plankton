@@ -265,3 +265,30 @@ test('saver: picker blocked (e.g. SecurityError in a sandbox) -> download', asyn
   const r = await s.saver.save(req('S1'));
   assert.deepEqual([r.status, r.reason], ['downloaded', 'picker']);
 });
+
+test('saver: html builder gets the same plan payload read from the target file (overwrite keeps disk-only history)', async () => {
+  const h = fakeHandle('plan.html');
+  h.content = embedPayload(TPL, buildPayload(PLAN, { at: 'COLLEAGUE', history: [{ n: 7, savedAt: 'x' }] }));
+  const s = setup({ picker: async () => assert.fail('no picker'), confirm: async () => 'overwrite' });
+  await s.kv.set('p1@file:///a/plan.html', { handle: h, stamp: 'S1' });
+  await s.saver.bind('p1', 'S1');
+  const seen = [];
+  const r = await s.saver.save(req('S2', { html: async (disk) => (seen.push(disk), fileHtml(PLAN, 'S2')) }));
+  assert.equal(r.status, 'saved');
+  assert.equal(s.calls.confirm.length, 1);
+  assert.equal(seen.length, 1);
+  assert.deepEqual(seen[0].history, [{ n: 7, savedAt: 'x' }]);
+  assert.match(h.content, /S2/);
+  // A different plan on disk, or Save as to a new file: nothing to merge.
+  const other = fakeHandle('new.html');
+  const t = setup({ picker: async () => other });
+  await t.saver.bind('p1', null);
+  const got = [];
+  await t.saver.save(req('S3', { saveAs: true, html: async (d) => (got.push(d), fileHtml(PLAN, 'S3')) }));
+  assert.deepEqual(got, [null]);
+  // Downloads (no File System Access API) render too.
+  const u = setup({ picker: null });
+  u.saver.bind('p1', null);
+  await u.saver.save(req('S4', { html: async () => 'DL' }));
+  assert.equal(u.downloads[0][1], 'DL');
+});

@@ -1,7 +1,8 @@
 // Task grid: virtualised rows, inline editing, keyboard navigation, drag-and-drop
 // reordering / re-parenting and column resize.
 import { escapeHtml as esc } from '../../util/escape.js';
-import { visibleColumns, moveColumnTo } from './columns.js';
+import { visibleColumns, moveColumnTo, columnLabel } from './columns.js';
+import { revealCell, columnBox, pinnedWidth } from './reveal.js';
 import { clickAction, keyAction } from './edittrigger.js';
 import { findField, formatValue, setFieldValue } from '../../model/fields.js';
 import { descText } from '../../util/sanitize.js';
@@ -9,7 +10,8 @@ import { safeUrl } from '../../util/markdown.js';
 import { fmtDate, fmtVariance, statusSlug } from '../format.js';
 import { predsText, setTaskField, setPredsFromText } from '../../model/edit.js';
 import { moveRows, isTask } from '../../model/tree.js';
-import { STATUSES, PRIORITIES } from '../../model/plan.js';
+import { statusNames, priorityNames, optionColor, summaryStatus as rolledStatus } from '../../model/options.js';
+import { normRange, rangeSize, parseTSV, toTSV, cellText, pasteTargets, fillDownTargets, fillHandleTargets, applyCellEdits, skipSummary } from '../../model/cells.js';
 import { variance, isOverdue, statusDay } from '../../model/stats.js';
 import { parseISO, toYMD } from '../../schedule/calendar.js';
 import { mod, isTyping } from '../dom.js';
@@ -18,16 +20,9 @@ const OVERSCAN = 10;
 const HEAD_H = 44;
 const DATE_COLS = new Set(['start', 'finish', 'duration', 'progress']);
 
-export function summaryStatus(tree, id) {
-  const leaves = [];
-  const walk = (x) => {
-    for (const c of tree.children.get(x)) tree.isSummary(c) ? walk(c) : leaves.push(tree.byId.get(c));
-  };
-  walk(id);
-  if (leaves.length && leaves.every((t) => t.status === 'Done')) return 'Done';
-  if (leaves.some((t) => t.status === 'Blocked')) return 'Blocked';
-  if (leaves.some((t) => t.status !== 'Not started' || t.progress > 0)) return 'In progress';
-  return 'Not started';
+/** Status shown on a summary row (see options.js summaryStatus). */
+export function summaryStatus(tree, id, plan) {
+  return rolledStatus(tree, id, plan);
 }
 
 export function createGrid(app, root) {
@@ -45,6 +40,11 @@ export function createGrid(app, root) {
   let editing = null;
   let released = false;
   let suppressClick = false;
+  let clip = null; // last copied TSV (fallback when the clipboard event has no data)
+  let cellDrag = null;
+  let fillDrag = null;
+  let fillPreview = null;
+  let autoScrollX = 0;
 
   const rowH = () => app.rowH();
   const colDef = (key) => cols.find((x) => x.key === key);
@@ -70,7 +70,8 @@ export function createGrid(app, root) {
         const tog = summary
           ? `<button type="button" class="tog" data-act="toggle" tabindex="-1" aria-expanded="${!t.collapsed}" aria-label="${t.collapsed ? 'Expand' : 'Collapse'} ${esc(t.name)}">${t.collapsed ? '▸' : '▾'}</button>`
           : '<span class="tog-sp"></span>';
-        return `<span class="ind" style="width:${t.level * 18}px"></span>${tog}${t.milestone ? '<span class="ms-ic" title="Milestone">◆</span>' : ''}<span class="nm">${esc(t.name) || '<span class="muted">(untitled)</span>'}</span>${t.descHtml ? '<span class="has-desc" title="Has a description" aria-hidden="true">≡</span>' : ''}<button type="button" class="open-btn" data-act="card" tabindex="-1" title="Open task details (Enter)" aria-label="Open details for ${esc(t.name || 'task')}">↗</button>`;
+        const done = store.d.done.has(t.id) ? '<span class="done-ck" title="Complete" aria-label="Complete">✓</span>' : '';
+        return `<span class="ind" style="width:${t.level * 18}px"></span>${tog}${done}${t.milestone ? '<span class="ms-ic" title="Milestone">◆</span>' : ''}<span class="nm">${esc(t.name) || '<span class="muted">(untitled)</span>'}</span>${t.descHtml ? '<span class="has-desc" title="Has a description" aria-hidden="true">≡</span>' : ''}<button type="button" class="open-btn" data-act="card" tabindex="-1" title="Open task details (Enter)" aria-label="Open details for ${esc(t.name || 'task')}">↗</button>`;
       }
       case 'start':
         return esc(fmtDate(t.start, ctx.year));
@@ -85,11 +86,11 @@ export function createGrid(app, root) {
       case 'preds':
         return esc(predsText(t, tree));
       case 'status': {
-        const s = summary ? summaryStatus(tree, t.id) : t.status;
-        return `<span class="pill st-${statusSlug(s)}">${esc(s)}</span>`;
+        const s = summary ? rolledStatus(tree, t.id, store.plan) : t.status;
+        return `<span class="pill opt st-${statusSlug(s)}" style="--opt:${esc(optionColor(store.plan, 'status', s))}">${esc(s)}</span>`;
       }
       case 'priority':
-        return summary ? '' : `<span class="prio pr-${t.priority.toLowerCase()}">${esc(t.priority)}</span>`;
+        return summary ? '' : `<span class="prio opt pr-${statusSlug(t.priority)}" style="--opt:${esc(optionColor(store.plan, 'priority', t.priority))}">${esc(t.priority)}</span>`;
       case 'workstream':
         return esc(t.workstream);
       case 'variance': {
@@ -115,6 +116,23 @@ export function createGrid(app, root) {
     return esc(formatValue(f, v));
   }
 
+  // range outline / fill preview classes for cell (i, ci)
+  function rgCls(i, ci, ctx) {
+    let out = '';
+    const g = ctx.rg;
+    if (g && g.multi && i >= g.r1 && i <= g.r2 && ci >= g.c1 && ci <= g.c2) {
+      out += ' rg';
+      if (i === g.r1) out += ' rg-t';
+      if (i === g.r2) out += ' rg-b';
+      if (ci === g.c1) out += ' rg-l';
+      if (ci === g.c2) out += ' rg-r';
+    }
+    const f = ctx.fill;
+    if (f && i >= f.r1 && i <= f.r2 && ci >= f.c1 && ci <= f.c2) out += ' rg-fill';
+    return out;
+  }
+  const fillHandle = (i, ci, ctx) => (ctx.rg && !store.readOnly && i === ctx.rg.r2 && ci === ctx.rg.c2 ? '<span class="fill-h" data-act="fill" title="Drag down to fill (or Ctrl+D)" aria-hidden="true"></span>' : '');
+
   function rowHTML(r, i, ctx) {
     const s = store;
     const { tree } = s.d;
@@ -124,18 +142,20 @@ export function createGrid(app, root) {
     if (r.kind === 'section') {
       const n = ctx.sectionCounts.get(r.id) || 0;
       return `<div class="gr section${sel ? ' sel' : ''}" role="row" aria-selected="${sel}" data-id="${r.id}" style="top:${top}px;--sec:${r.color}">
-<div class="gc c-num${act ? ' act' : ''}" data-col="num" role="gridcell" id="gc-${r.id}-num"><span class="drag" title="Drag to move section" aria-hidden="true">⋮⋮</span></div>
-<div class="gc sec-body${act && act !== 'num' ? ' act' : ''}" data-col="name" role="gridcell" id="gc-${r.id}-name"><button type="button" class="tog" data-act="toggle" tabindex="-1" aria-expanded="${!r.collapsed}" aria-label="${r.collapsed ? 'Expand' : 'Collapse'} section ${esc(r.name)}">${r.collapsed ? '▸' : '▾'}</button><button type="button" class="swatch edit-only" data-act="color" tabindex="-1" style="background:${r.color}" aria-label="Change colour of section ${esc(r.name)}"></button><span class="nm">${esc(r.name)}</span><span class="sec-count">${n} task${n === 1 ? '' : 's'}</span><button type="button" class="btn ic sec-menu edit-only" data-act="sec-menu" tabindex="-1" aria-label="Section actions for ${esc(r.name)}">⋯</button></div></div>`;
+<div class="gc c-num pin${act === 'num' ? ' act' : ''}${rgCls(i, 0, ctx)}" data-col="num" role="gridcell" id="gc-${r.id}-num"><span class="drag" title="Drag to move section" aria-hidden="true">⋮⋮</span></div>
+<div class="gc sec-body${act && act !== 'num' ? ' act' : ''}${ctx.rg && ctx.rg.c2 >= 1 ? rgCls(i, Math.max(1, ctx.rg.c1), ctx) : ''}" data-col="name" role="gridcell" id="gc-${r.id}-name"><button type="button" class="tog" data-act="toggle" tabindex="-1" aria-expanded="${!r.collapsed}" aria-label="${r.collapsed ? 'Expand' : 'Collapse'} section ${esc(r.name)}">${r.collapsed ? '▸' : '▾'}</button><button type="button" class="swatch edit-only" data-act="color" tabindex="-1" style="background:${r.color}" aria-label="Change colour of section ${esc(r.name)}"></button><span class="nm">${esc(r.name)}</span><span class="sec-count">${n} task${n === 1 ? '' : 's'}</span><button type="button" class="btn ic sec-menu edit-only" data-act="sec-menu" tabindex="-1" aria-label="Section actions for ${esc(r.name)}">⋯</button></div></div>`;
     }
     const summary = tree.isSummary(r.id);
-    const cls = ['gr', 'task', summary ? 'sum' : '', sel ? 'sel' : '', ctx.critical && ctx.critical.tasks.has(r.id) ? 'crit' : '', isOverdue(r, ctx.day) && !summary ? 'overdue' : '']
+    const done = s.d.done.has(r.id);
+    const cls = ['gr', 'task', summary ? 'sum' : '', sel ? 'sel' : '', done ? 'done' : '', ctx.critical && ctx.critical.tasks.has(r.id) ? 'crit' : '', !done && isOverdue(r, ctx.day, s.plan) && !summary ? 'overdue' : '']
       .filter(Boolean)
       .join(' ');
     const tint = s.d.sectionColor.get(r.id);
+    const stColor = cols.some((c) => c.key === 'status') ? optionColor(s.plan, 'status', summary ? rolledStatus(tree, r.id, s.plan) : r.status) : '';
     const cells = cols
       .map(
-        (c) =>
-          `<div class="gc c-${c.key}${c.field ? ' c-cf' : ''}${c.align === 'r' ? ' r' : c.align === 'c' ? ' c' : ''}${act === c.key ? ' act' : ''}" data-col="${c.key}" role="gridcell" id="gc-${r.id}-${c.key}">${cellHTML(r, c, ctx)}</div>`
+        (c, ci) =>
+          `<div class="gc c-${c.key}${c.fixed ? ' pin' : ''}${c.field ? ' c-cf' : ''}${c.align === 'r' ? ' r' : c.align === 'c' ? ' c' : ''}${c.key === 'status' ? ' tinted' : ''}${act === c.key ? ' act' : ''}${rgCls(i, ci, ctx)}" data-col="${c.key}" role="gridcell" id="gc-${r.id}-${c.key}"${c.key === 'status' ? ` style="--opt:${esc(stColor)}"` : ''}>${cellHTML(r, c, ctx)}${fillHandle(i, ci, ctx)}</div>`
       )
       .join('');
     return `<div class="${cls}" role="row" aria-selected="${sel}" aria-level="${r.level + 1}" data-id="${r.id}" style="top:${top}px${tint ? `;--tint:${tint}` : ''}">${cells}</div>`;
@@ -148,10 +168,11 @@ export function createGrid(app, root) {
     root.style.setProperty('--gcols', tmpl);
     root.style.setProperty('--gwidth', `${total}px`);
     root.style.setProperty('--rowh', `${rowH()}px`);
+    root.style.setProperty('--pinw', `${cols[0] && cols[0].key === 'num' ? cols[0].width : 0}px`);
     head.innerHTML = cols
       .map(
         (c) =>
-          `<div class="gh${c.align === 'r' ? ' r' : ''}${c.field ? ' gh-cf' : ''}" data-col="${c.key}" role="columnheader"${c.fixed ? '' : ` draggable="true"`} title="${esc(c.title ? `${c.title} · ` : '')}${c.fixed ? 'Right-click for column options' : 'Drag to reorder · right-click for options'}"><span class="gh-l">${esc(c.label)}</span>${c.key !== 'num' ? `<span class="rs" data-rs="${c.key}" title="Drag to resize" aria-hidden="true"></span>` : ''}</div>`
+          `<div class="gh${c.fixed ? ' pin' : ''}${c.align === 'r' ? ' r' : ''}${c.field ? ' gh-cf' : ''}" data-col="${c.key}" role="columnheader"${c.fixed ? '' : ` draggable="true"`} title="${esc(c.title ? `${c.title} · ` : '')}${c.fixed ? 'Right-click for column options' : 'Drag to reorder · right-click for options'}"><span class="gh-l">${esc(c.label)}</span>${c.key !== 'num' ? `<span class="rs" data-rs="${c.key}" title="Drag to resize" aria-hidden="true"></span>` : ''}</div>`
       )
       .join('');
     const n = store.d.visible.length;
@@ -175,12 +196,18 @@ export function createGrid(app, root) {
       day: statusDay(store.plan),
       critical: store.d.critical,
       sectionCounts: sectionCounts(),
+      rg: range(),
+      fill: fillPreview,
     };
+    if (ctx.rg) ctx.rg.multi = rangeSize(ctx.rg) > 1;
     const out = [];
     for (let i = from; i < to; i++) out.push(rowHTML(store.d.visible[i], i, ctx));
     rowsEl.innerHTML = out.join('');
     const a = store.active;
-    if (a && store.d.indexOf.has(a.id)) body.setAttribute('aria-activedescendant', `gc-${a.id}-${a.col}`);
+    if (a && store.d.indexOf.has(a.id)) {
+      const sec = store.d.tree.byId.get(a.id).kind === 'section';
+      body.setAttribute('aria-activedescendant', `gc-${a.id}-${sec ? (a.col === 'num' ? 'num' : 'name') : a.col}`);
+    }
     else body.removeAttribute('aria-activedescendant');
   }
 
@@ -196,15 +223,108 @@ export function createGrid(app, root) {
     return m;
   }
 
-  function ensureVisible(id) {
+  /** Scroll so the row (and the cell in `col`, default the active column) is fully visible. */
+  function ensureVisible(id, col = store.active && store.active.id === id ? store.active.col : null) {
     const i = store.d.indexOf.get(id);
     if (i == null) return;
     const h = rowH();
-    const top = i * h;
-    const viewH = scroll.clientHeight - HEAD_H - 16;
-    if (top < scroll.scrollTop) scroll.scrollTop = top;
-    else if (top + h > scroll.scrollTop + viewH) scroll.scrollTop = top + h - viewH;
+    const widths = cols.map((c) => c.width);
+    const pinned = cols.filter((c) => c.fixed).length;
+    const ci = col ? cols.findIndex((c) => c.key === col) : -1;
+    const section = store.d.visible[i].kind === 'section';
+    const box = ci >= 0 ? columnBox(widths, ci) : { left: 0, width: 0 };
+    const next = revealCell(
+      { top: scroll.scrollTop, left: scroll.scrollLeft, width: scroll.clientWidth, height: scroll.clientHeight },
+      { top: HEAD_H + i * h, height: h, left: box.left, width: box.width },
+      { top: HEAD_H, left: pinnedWidth(widths, pinned), pinned: section || ci < pinned }
+    );
+    if (next.top !== Math.round(scroll.scrollTop)) scroll.scrollTop = next.top;
+    if (next.left !== Math.round(scroll.scrollLeft)) scroll.scrollLeft = next.left;
     renderWindow();
+  }
+
+  // ---- cell range ----------------------------------------------------------
+  const colIndex = (key) => Math.max(0, cols.findIndex((c) => c.key === key));
+  /** Current cell range { r1, c1, r2, c2 } (visible row / column indices) or null. */
+  function range() {
+    const a = store.active;
+    if (!a || !store.d.indexOf.has(a.id) || !cols.length) return null;
+    const an = store.cellAnchor && store.d.indexOf.has(store.cellAnchor.id) ? store.cellAnchor : a;
+    return normRange({ r: store.d.indexOf.get(an.id), c: colIndex(an.col) }, { r: store.d.indexOf.get(a.id), c: colIndex(a.col) });
+  }
+  /** Select range g with the active cell at its top-left. */
+  function setRange(g) {
+    const vis = store.d.visible;
+    if (!vis[g.r1] || !vis[g.r2]) return;
+    store.anchor = vis[g.r2].id;
+    store.cellAnchor = { id: vis[g.r2].id, col: cols[g.c2].key };
+    app.select(vis[g.r1].id, { extend: true, col: cols[g.c1].key, keepCard: true });
+    ensureVisible(vis[g.r1].id);
+  }
+  const labels = () => Object.fromEntries(cols.map((c) => [c.key, columnLabel(c)]));
+  function rangeTSV(g) {
+    const out = [];
+    for (let r = g.r1; r <= g.r2; r++) out.push(cols.slice(g.c1, g.c2 + 1).map((c) => cellText(store.plan, store.d.tree, store.d.visible[r], c.key)));
+    return toTSV(out);
+  }
+  /** Apply [{ r, c, value }] as ONE undoable step; one toast lists skipped cells. */
+  function applyCells(label, cells, after, quiet = []) {
+    if (store.readOnly) return store.emit('readonly');
+    const vis = store.d.visible;
+    const edits = cells.filter((x) => vis[x.r] && cols[x.c]).map((x) => ({ id: vis[x.r].id, col: cols[x.c].key, value: x.value }));
+    if (!edits.length) return undefined;
+    const lb = labels();
+    let res = null;
+    store.commit(label, (plan) => {
+      res = applyCellEdits(plan, edits, lb);
+      return res.applied ? undefined : false;
+    });
+    if (after) setRange(after);
+    const skipped = res ? res.skipped.filter((x) => !quiet.includes(x.kind)) : [];
+    if (skipped.length) app.toast(skipSummary(skipped, lb), 'warn', 7000);
+    return undefined;
+  }
+  function pasteText(text) {
+    const g = range();
+    if (!g || text == null || text === '') return;
+    const block = parseTSV(text);
+    const { cells, range: out } = pasteTargets(block, g, store.d.visible.length, cols.length);
+    applyCells(cells.length > 1 ? `Paste ${cells.length} cells` : 'Paste', cells, out);
+  }
+  function clearRange() {
+    const g = range();
+    if (!g) return;
+    const cells = [];
+    for (let r = g.r1; r <= g.r2; r++) for (let c = g.c1; c <= g.c2; c++) cells.push({ r, c, value: '' });
+    applyCells('Clear cells', cells, null, ['section', 'rollup', 'readonly', 'required']);
+  }
+  function fromCells(targets) {
+    return targets.map((x) => ({ r: x.r, c: x.c, value: cellText(store.plan, store.d.tree, store.d.visible[x.from.r], cols[x.from.c].key) }));
+  }
+  function fillDown() {
+    const g = range();
+    if (!g) return;
+    const t = fillDownTargets(g);
+    if (!t.length) return;
+    applyCells('Fill down', fromCells(t), g.r1 === g.r2 ? null : g);
+  }
+  /** Visible row / column index under a pointer position (pinned columns accounted for). */
+  function cellAt(x, y) {
+    const sr = scroll.getBoundingClientRect();
+    const n = store.d.visible.length;
+    const r = Math.max(0, Math.min(n - 1, Math.floor((y - sr.top - HEAD_H + scroll.scrollTop) / rowH())));
+    const widths = cols.map((c) => c.width);
+    const pin = pinnedWidth(widths, cols.filter((c) => c.fixed).length);
+    const px = x - sr.left;
+    const cx = px < pin ? px : px + scroll.scrollLeft;
+    let c = 0;
+    for (let acc = 0; c < cols.length - 1 && acc + widths[c] <= cx; c++) acc += widths[c];
+    return { r, c };
+  }
+  function edgeScroll(e) {
+    const sr = scroll.getBoundingClientRect();
+    autoScroll = e.clientY < sr.top + HEAD_H + 24 ? -1 : e.clientY > sr.bottom - 24 ? 1 : 0;
+    autoScrollX = e.clientX < sr.left + 24 ? -1 : e.clientX > sr.right - 24 ? 1 : 0;
   }
 
   // ---- editing -----------------------------------------------------------
@@ -246,7 +366,7 @@ export function createGrid(app, root) {
     if (field && field.type === 'checkbox') return toggleCheck(id, col);
     if (col === 'status' || col === 'priority' || (field && field.type === 'select')) {
       input = document.createElement('select');
-      const list = field ? ['', ...field.options] : col === 'status' ? STATUSES : PRIORITIES;
+      const list = field ? ['', ...field.options] : col === 'status' ? statusNames(store.plan) : priorityNames(store.plan);
       input.innerHTML = list.map((s) => `<option${s === orig ? ' selected' : ''}>${esc(s)}</option>`).join('');
     } else if (field) {
       input = document.createElement('input');
@@ -316,7 +436,7 @@ export function createGrid(app, root) {
           return f ? setFieldValue(t, f, v) || undefined : false;
         }
         if (ed.col === 'name' && !v.trim()) return 'Task name cannot be empty.';
-        return setTaskField(t, ed.col, v) || undefined;
+        return setTaskField(t, ed.col, v, undefined, plan) || undefined;
       });
     } else renderWindow(true);
     if (!fromBlur) {
@@ -349,8 +469,8 @@ export function createGrid(app, root) {
     i = Math.max(0, Math.min(vis.length - 1, i + dRow));
     ci = Math.max(0, Math.min(keys.length - 1, ci + dCol));
     const r = vis[i];
-    app.select(r.id, { extend, col: r.kind === 'section' && ci > 1 ? 'name' : keys[ci], keepCard: true });
-    ensureVisible(r.id);
+    app.select(r.id, { extend, col: keys[ci], keepCard: true });
+    ensureVisible(r.id, keys[ci]);
   }
 
   body.addEventListener('keydown', (e) => {
@@ -385,6 +505,17 @@ export function createGrid(app, root) {
       handled();
       return app.select(vis[0].id, { col: 'name' });
     }
+    if (mod(e) && !e.altKey && a) {
+      const lk = k.toLowerCase();
+      if (lk === 'd') {
+        handled();
+        return fillDown();
+      }
+      if (lk === 'a') {
+        handled();
+        return vis.length && cols.length ? setRange({ r1: 0, c1: 0, r2: vis.length - 1, c2: cols.length - 1 }) : undefined;
+      }
+    }
     switch (k) {
       case 'ArrowDown':
       case 'ArrowUp':
@@ -399,11 +530,11 @@ export function createGrid(app, root) {
           if (isCollapsible && !!r.collapsed !== (k === 'ArrowLeft')) app.toggleCollapse(r.id);
           return undefined;
         }
-        return move(0, k === 'ArrowRight' ? 1 : -1, false);
+        return move(0, k === 'ArrowRight' ? 1 : -1, e.shiftKey);
       case 'Home':
       case 'End':
         handled();
-        return mod(e) ? move(k === 'Home' ? -1e9 : 1e9, 0, e.shiftKey) : move(0, k === 'Home' ? -1e9 : 1e9, false);
+        return mod(e) ? move(k === 'Home' ? -1e9 : 1e9, 0, e.shiftKey) : move(0, k === 'Home' ? -1e9 : 1e9, e.shiftKey);
       case 'PageDown':
       case 'PageUp':
         handled();
@@ -421,18 +552,28 @@ export function createGrid(app, root) {
       case 'Delete':
       case 'Backspace':
         handled();
-        return app.deleteSelection();
+        // the # column (row handles) or Ctrl+Delete removes rows; elsewhere Delete clears the cells
+        if (mod(e) || (a && a.col === 'num')) return app.deleteSelection();
+        return clearRange();
       case 'Tab':
         if (released || !a) return undefined;
         handled();
         return e.shiftKey ? app.outdent() : app.indent();
-      case 'Escape':
+      case 'Escape': {
+        const g = range();
+        if (g && rangeSize(g) > 1) {
+          handled();
+          store.cellAnchor = { ...a };
+          store.anchor = a.id;
+          return app.select(a.id, { col: a.col, keepCard: true });
+        }
         released = true;
         if (store.cardId != null) {
           handled();
           return app.closeCard();
         }
         return app.toast('Grid released: Tab now moves focus out of the grid.', 'info', 2000);
+      }
       case ' ':
         if (r && decide() === 'toggle-check') {
           handled();
@@ -462,6 +603,41 @@ export function createGrid(app, root) {
   body.addEventListener('focus', () => {
     released = false;
     if (!store.active && store.d.visible.length) app.select(store.d.visible[0].id, { col: 'name', keepCard: true });
+  });
+
+  // ---- clipboard: TSV like Excel / Sheets -----------------------------------
+  // Chrome dispatches copy / paste at document.body when the focused element
+  // is not editable, so listen on the document while the grid has focus.
+  const gridFocused = () => document.activeElement === body && !editing;
+  function copyRange(e) {
+    if (!gridFocused()) return false;
+    const g = range();
+    if (!g) return false;
+    const text = rangeTSV(g);
+    e.preventDefault();
+    if (e.clipboardData) e.clipboardData.setData('text/plain', text);
+    clip = text;
+    const n = rangeSize(g);
+    app.toast(`Copied ${n} cell${n === 1 ? '' : 's'}.`, 'info', 1500);
+    return true;
+  }
+  document.addEventListener('copy', copyRange);
+  document.addEventListener('cut', (e) => {
+    if (!gridFocused()) return undefined;
+    if (store.readOnly) return store.emit('readonly');
+    if (copyRange(e)) clearRange();
+    return undefined;
+  });
+  document.addEventListener('paste', (e) => {
+    if (!gridFocused()) return;
+    e.preventDefault();
+    // The grid's own copy is only a fallback for browsers without clipboardData;
+    // a system clipboard holding non-text (an image, files) pastes nothing.
+    if (!e.clipboardData) return pasteText(clip);
+    const text = e.clipboardData.getData('text/plain');
+    if (text) pasteText(text);
+    else app.toast('The clipboard holds no text to paste.', 'info', 3000);
+    return undefined;
   });
 
   // ---- mouse ---------------------------------------------------------------
@@ -501,6 +677,7 @@ export function createGrid(app, root) {
     if (e.detail > 1) return undefined;
     app.select(id, { extend: e.shiftKey, toggle: mod(e), col, keepCard: true });
     body.focus({ preventScroll: true });
+    ensureVisible(id, col);
     return undefined;
   });
 
@@ -618,6 +795,22 @@ export function createGrid(app, root) {
   let drag = null;
   let autoScroll = 0;
   rowsEl.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || e.target.closest('.ed')) return;
+    if (e.target.closest('.fill-h')) {
+      e.preventDefault();
+      const g = range();
+      if (!g || store.readOnly) return;
+      fillDrag = { g, to: g.r2 };
+      body.classList.add('cell-drag');
+      return;
+    }
+    const cell = e.target.closest('[data-col]');
+    if (!cell || cell.classList.contains('c-num') || e.target.closest('[data-act], a[href]') || e.shiftKey || mod(e)) return;
+    const rowEl = cell.closest('.gr');
+    cellDrag = { id: Number(rowEl.dataset.id), col: cell.dataset.col, started: false, last: null };
+  });
+  rowsEl.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.fill-h')) return;
     const num = e.target.closest('.c-num');
     if (!num || e.button !== 0 || store.readOnly) return;
     hideTip();
@@ -640,6 +833,39 @@ export function createGrid(app, root) {
     return { r, i, pos };
   }
   window.addEventListener('pointermove', (e) => {
+    if (fillDrag) {
+      edgeScroll(e);
+      const { r } = cellAt(e.clientX, e.clientY);
+      const to = Math.max(fillDrag.g.r2, r);
+      if (to === fillDrag.to) return;
+      fillDrag.to = to;
+      fillPreview = to > fillDrag.g.r2 ? { r1: fillDrag.g.r2 + 1, r2: to, c1: fillDrag.g.c1, c2: fillDrag.g.c2 } : null;
+      renderWindow(true);
+      return;
+    }
+    if (cellDrag) {
+      if (!(e.buttons & 1)) {
+        cellDrag = null;
+        return;
+      }
+      const { r, c } = cellAt(e.clientX, e.clientY);
+      const vis = store.d.visible;
+      const key = cols[c] ? cols[c].key : 'name';
+      const here = `${r}:${key}`;
+      if (!cellDrag.started) {
+        if (!vis[r] || (vis[r].id === cellDrag.id && (key === cellDrag.col || vis[r].kind === 'section'))) return;
+        cellDrag.started = true;
+        if (window.getSelection) window.getSelection().removeAllRanges();
+        body.classList.add('cell-drag');
+        app.select(cellDrag.id, { col: cellDrag.col, keepCard: true });
+        body.focus({ preventScroll: true });
+      }
+      edgeScroll(e);
+      if (here === cellDrag.last || !vis[r]) return;
+      cellDrag.last = here;
+      app.select(vis[r].id, { extend: true, col: key, keepCard: true });
+      return;
+    }
     if (!drag) return;
     if (!drag.started) {
       if (Math.abs(e.clientY - drag.y) + Math.abs(e.clientX - drag.x) < 6) return;
@@ -673,8 +899,34 @@ export function createGrid(app, root) {
     autoScroll = e.clientY < sr.top + HEAD_H + 24 ? -1 : e.clientY > sr.bottom - 24 ? 1 : 0;
   });
   setInterval(() => {
-    if (drag && drag.started && autoScroll) scroll.scrollTop += autoScroll * 14;
+    const on = (drag && drag.started) || (cellDrag && cellDrag.started) || fillDrag;
+    if (!on) return;
+    if (autoScroll) scroll.scrollTop += autoScroll * 14;
+    if (autoScrollX && !drag) scroll.scrollLeft += autoScrollX * 14;
   }, 30);
+  function endCellDrag(cancel) {
+    body.classList.remove('cell-drag');
+    autoScroll = 0;
+    autoScrollX = 0;
+    if (fillDrag) {
+      const { g, to } = fillDrag;
+      fillDrag = null;
+      fillPreview = null;
+      suppressClick = true;
+      setTimeout(() => (suppressClick = false), 0);
+      if (cancel || to <= g.r2) return renderWindow(true);
+      return applyCells('Fill', fromCells(fillHandleTargets(g, to)), { r1: g.r1, c1: g.c1, r2: to, c2: g.c2 });
+    }
+    if (cellDrag) {
+      const started = cellDrag.started;
+      cellDrag = null;
+      if (started) {
+        suppressClick = true;
+        setTimeout(() => (suppressClick = false), 0);
+      }
+    }
+    return undefined;
+  }
   const endDrag = (e, cancel) => {
     if (!drag) return;
     const d = drag;
@@ -700,10 +952,17 @@ export function createGrid(app, root) {
     });
     return undefined;
   };
-  window.addEventListener('pointerup', (e) => endDrag(e, false));
-  window.addEventListener('pointercancel', (e) => endDrag(e, true));
+  window.addEventListener('pointerup', (e) => {
+    endCellDrag(false);
+    endDrag(e, false);
+  });
+  window.addEventListener('pointercancel', (e) => {
+    endCellDrag(true);
+    endDrag(e, true);
+  });
   window.addEventListener('keydown', (e) => {
     if (drag && drag.started && e.key === 'Escape') endDrag(e, true);
+    if (fillDrag && e.key === 'Escape') endCellDrag(true);
   });
 
   // column resize
@@ -750,6 +1009,10 @@ export function createGrid(app, root) {
     renderWindow,
     startEdit,
     ensureVisible,
+    range,
+    pasteText,
+    fillDown,
+    clearRange,
     focus: () => body.focus({ preventScroll: true }),
     get scrollTop() {
       return scroll.scrollTop;
