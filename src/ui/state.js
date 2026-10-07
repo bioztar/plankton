@@ -141,6 +141,8 @@ export function createStore({ plan, storage, readOnly = false, embedded = false,
     }
     s.lastLabel = label;
     s.persist();
+    // Undoable commits are content edits; view tweaks (zoom, collapse, widths) are not.
+    if (undo) s.emit('edit', label);
     s.emit('change', { label, moved: s.d.moved });
     return true;
   };
@@ -151,6 +153,7 @@ export function createStore({ plan, storage, readOnly = false, embedded = false,
     s.plan = normalizePlan(H.restore(from.pop()));
     s.derive(false);
     s.persist();
+    s.emit('edit');
     s.emit('change');
     return true;
   };
