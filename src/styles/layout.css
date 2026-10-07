@@ -63,3 +63,4 @@ body.drop-on::after {
   .stats { margin-left: 0; }
   .filters { margin-left: 0; }
 }
+.tb-group[hidden] { display: none; }

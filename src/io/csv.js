@@ -1,6 +1,8 @@
 // CSV export (flat, with outline level). Pure.
 import { formatLink } from '../schedule/links.js';
 import { variance } from '../model/stats.js';
+import { formatValue } from '../model/fields.js';
+import { descText } from '../util/sanitize.js';
 
 function cell(v) {
   let s = v == null ? '' : String(v);
@@ -11,11 +13,12 @@ function cell(v) {
 export const CSV_COLUMNS = [
   'ID', 'Outline', 'Outline level', 'Section', 'Name', 'Start', 'Finish', 'Duration', 'Progress %',
   'Status', 'Priority', 'Owner', 'Workstream', 'Tags', 'Milestone', 'Predecessors', 'Baseline start',
-  'Baseline finish', 'Variance', 'Notes',
+  'Baseline finish', 'Variance', 'Notes', 'Description',
 ];
 
 export function toCSV(plan, tree) {
-  const lines = [CSV_COLUMNS.map(cell).join(',')];
+  const fields = plan.fields || [];
+  const lines = [[...CSV_COLUMNS, ...fields.map((f) => f.name)].map(cell).join(',')];
   for (const r of plan.rows) {
     if (r.kind === 'section') continue;
     const sec = tree.byId.get(tree.sectionOf.get(r.id));
@@ -42,6 +45,8 @@ export function toCSV(plan, tree) {
         r.baseline ? r.baseline.finish : '',
         v == null ? '' : v,
         r.notes,
+        descText(r),
+        ...fields.map((f) => formatValue(f, r.values && r.values[f.id])),
       ]
         .map(cell)
         .join(',')

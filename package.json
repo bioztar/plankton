@@ -1,6 +1,6 @@
 {
   "name": "planboard",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Single-file HTML project planner: nested tasks, sections, task cards, Gantt with FS/SS/FF/SF dependencies.",
   "private": true,
   "type": "module",

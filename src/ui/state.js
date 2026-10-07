@@ -23,7 +23,7 @@ export function createStore({ plan, storage, readOnly = false, embedded = false,
     active: null, // { id, col }
     anchor: null,
     view: 'plan',
-    filter: { text: '', owner: '', status: '', section: '', overdue: false },
+    filter: { text: '', owner: '', status: '', section: '', overdue: false, field: null },
     cardId: null,
     d: null,
     saveState: 'saved',

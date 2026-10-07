@@ -1,6 +1,8 @@
 // Header statistics and filtering helpers (pure).
 import { parseISO, todayISO, workdayDiff } from '../schedule/calendar.js';
 import { isTask } from './tree.js';
+import { descText } from '../util/sanitize.js';
+import { formatValue, findField } from './fields.js';
 
 export function statusDay(plan, now) {
   return parseISO(plan.statusDate || todayISO(now));
@@ -47,12 +49,14 @@ export function variance(task) {
 
 /**
  * Return a Set of matching task ids for the filter, or null when no filter is active.
- * filter: { text, owner, status, section, overdue }
+ * filter: { text, owner, status, section, overdue, field: { id, value } }
+ * (field.value is the display text, '' = empty)
  */
 export function matchTasks(plan, tree, filter, now) {
   const f = filter || {};
   const text = (f.text || '').trim().toLowerCase();
-  if (!text && !f.owner && !f.status && !f.section && !f.overdue) return null;
+  const fieldFilter = f.field && findField(plan, f.field.id) ? { def: findField(plan, f.field.id), value: String(f.field.value) } : null;
+  if (!text && !f.owner && !f.status && !f.section && !f.overdue && !fieldFilter) return null;
   const day = statusDay(plan, now);
   const out = new Set();
   for (const t of tree.tasks) {
@@ -60,8 +64,11 @@ export function matchTasks(plan, tree, filter, now) {
     if (f.status && t.status !== f.status) continue;
     if (f.section && String(tree.sectionOf.get(t.id)) !== String(f.section)) continue;
     if (f.overdue && (!isOverdue(t, day) || tree.isSummary(t.id))) continue;
+    if (fieldFilter && formatValue(fieldFilter.def, t.values && t.values[fieldFilter.def.id]) !== fieldFilter.value) continue;
     if (text) {
-      const hay = [t.name, t.owner, t.workstream, t.notes, t.desc, (t.tags || []).join(' '), tree.outline.get(t.id)]
+      const custom = (plan.fields || []).map((fd) => formatValue(fd, t.values && t.values[fd.id]));
+      const kv = (t.custom || []).map((c) => `${c.key} ${c.value}`);
+      const hay = [t.name, t.owner, t.workstream, t.notes, descText(t), (t.tags || []).join(' '), tree.outline.get(t.id), ...custom, ...kv]
         .join('\n')
         .toLowerCase();
       if (!hay.includes(text)) continue;

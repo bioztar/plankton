@@ -4,6 +4,8 @@ import { MIN_YEAR, MAX_YEAR, fromYMD, toISO, parseISO, nextWorkday, prevWorkday,
 import { parseLinkToken } from '../schedule/links.js';
 import { computeTree, normalizeLevels } from '../model/tree.js';
 import { createTask, createSection, STATUSES, PALETTE } from '../model/plan.js';
+import { fieldKey, fieldIdOfKey, coerceValue } from '../model/fields.js';
+import { markdownToHtml } from '../util/markdown.js';
 
 export const IMPORT_FIELDS = [
   { key: 'id', label: 'ID' },
@@ -16,6 +18,7 @@ export const IMPORT_FIELDS = [
   { key: 'level', label: 'Outline level' },
   { key: 'section', label: 'Section / Bucket' },
   { key: 'notes', label: 'Notes' },
+  { key: 'desc', label: 'Description' },
   { key: 'progress', label: 'Progress %' },
   { key: 'status', label: 'Status' },
 ];
@@ -30,7 +33,8 @@ const SYNONYMS = {
   preds: ['predecessors', 'predecessor', 'depends on', 'dependencies', 'dependency', 'preds'],
   level: ['outline level', 'level', 'outline', 'wbs', 'outline number', 'indent', 'hierarchy'],
   section: ['section', 'bucket', 'bucket name', 'phase', 'workstream', 'stream', 'group', 'category'],
-  notes: ['notes', 'note', 'description', 'comments', 'comment', 'details'],
+  notes: ['notes', 'note', 'comments', 'comment'],
+  desc: ['description', 'details', 'desc', 'task description'],
   progress: ['progress', '% complete', 'percent complete', '%', 'complete', '% done', 'pct complete'],
   status: ['status', 'state', 'progress status'],
 };
@@ -89,11 +93,21 @@ export function parseDelimited(text, delim = detectDelimiter(text)) {
 
 const norm = (h) => String(h || '').trim().toLowerCase().replace(/[_*]+/g, ' ').replace(/\s+/g, ' ');
 
-/** Map header cells to fields. Returns { field: columnIndex }. */
-export function detectColumns(headers) {
+/**
+ * Map header cells to fields. Returns { field: columnIndex }. Headers matching a
+ * plan custom column name map to its key (cf_<id>).
+ */
+export function detectColumns(headers, fields = []) {
   const map = {};
   const used = new Set();
   const hs = headers.map(norm);
+  for (const f of fields) {
+    const idx = hs.findIndex((h, i) => !used.has(i) && h && h === norm(f.name));
+    if (idx >= 0) {
+      map[fieldKey(f)] = idx;
+      used.add(idx);
+    }
+  }
   // exact matches first, then prefix/contains matches
   for (const pass of [0, 1]) {
     for (const f of IMPORT_FIELDS) {
@@ -210,7 +224,11 @@ export function importTable(plan, table, opts) {
   const order = opts.dateOrder === 'dmy' ? 'dmy' : 'mdy';
   const body = opts.hasHeader ? table.slice(1) : table.slice();
   const warnings = [];
-  const get = (r, k) => (mapping[k] != null && mapping[k] >= 0 ? String(r[mapping[k]] ?? '') : '');
+  // strip the formula-injection guard our CSV export adds ("'=x" → "=x")
+  const get = (r, k) => (mapping[k] != null && mapping[k] >= 0 ? String(r[mapping[k]] ?? '').replace(/^'(?=[=+\-@\t\r])/, '') : '');
+  const fieldCols = Object.keys(mapping)
+    .map((k) => ({ k, f: (plan.fields || []).find((x) => x.id === fieldIdOfKey(k)) }))
+    .filter((x) => x.f && mapping[x.k] != null && mapping[x.k] >= 0);
   const nameCol = mapping.name;
   const outlineMode = mapping.level != null && body.some((r) => /^\s*\d+\.\d/.test(String(r[mapping.level] || '')));
 
@@ -281,11 +299,20 @@ export function importTable(plan, table, opts) {
       milestone,
       owner: get(r, 'owner').trim(),
       notes: get(r, 'notes').trim(),
+      descHtml: get(r, 'desc').trim() ? markdownToHtml(get(r, 'desc').trim()) : '',
       progress,
       status,
       workstream: section,
     });
     if (milestone) task.finish = task.start;
+    for (const { k, f } of fieldCols) {
+      let raw = get(r, k).trim();
+      if (!raw) continue;
+      if (f.type === 'date') raw = parseDate(raw, order) || raw;
+      const res = coerceValue(f, raw);
+      if (res.error) warnings.push(`Row ${i + 1}: ${res.error}`);
+      else if (res.value != null) task.values[f.id] = res.value;
+    }
     rows.push(task);
     taskNum++;
     rowNumToNew.set(String(taskNum), task.id);

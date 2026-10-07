@@ -1,3 +1,4 @@
+import './minidom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { isISODate, fromYMD, toISO, parseISO, applyDateEdit, MAX_DURATION, MAX_LAG } from '../src/schedule/calendar.js';
