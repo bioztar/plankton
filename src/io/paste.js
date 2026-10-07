@@ -3,7 +3,8 @@
 import { MIN_YEAR, MAX_YEAR, fromYMD, toISO, parseISO, nextWorkday, prevWorkday, startFromDuration, durationFromDates, daysInMonth } from '../schedule/calendar.js';
 import { parseLinkToken } from '../schedule/links.js';
 import { computeTree, normalizeLevels } from '../model/tree.js';
-import { createTask, createSection, STATUSES, PALETTE } from '../model/plan.js';
+import { createTask, createSection, PALETTE } from '../model/plan.js';
+import { statusNames, completeStatuses, matchOption, isComplete } from '../model/options.js';
 import { fieldKey, fieldIdOfKey, coerceValue } from '../model/fields.js';
 import { markdownToHtml } from '../util/markdown.js';
 
@@ -205,12 +206,21 @@ function parseLevel(value, outlineMode) {
   return Math.max(0, +s - 1);
 }
 
-function matchStatus(v) {
+function matchStatus(v, plan) {
   const s = String(v || '').trim().toLowerCase();
   if (!s) return null;
-  if (s === 'completed' || s === 'complete') return 'Done';
-  if (s === 'late' || s === 'on hold') return 'Blocked';
-  return STATUSES.find((x) => x.toLowerCase() === s) || null;
+  const names = statusNames(plan);
+  const exact = matchOption(names, s);
+  if (exact) return exact;
+  if (s === 'completed' || s === 'complete' || s === 'done') return completeStatuses(plan)[0];
+  if (s === 'late' || s === 'on hold') return matchOption(names, 'Blocked');
+  return null;
+}
+
+function statusFromProgress(plan, progress) {
+  const names = statusNames(plan);
+  if (progress >= 100) return completeStatuses(plan)[0];
+  return progress > 0 ? matchOption(names, 'In progress') || names.find((n) => !isComplete(plan, n) && n !== names[0]) || names[0] : names[0];
 }
 
 /**
@@ -290,7 +300,7 @@ export function importTable(plan, table, opts) {
     let progress = progressRaw ? Math.max(0, Math.min(100, Math.round(parseFloat(progressRaw.replace(',', '.'))))) : 0;
     if (Number.isNaN(progress)) progress = 0;
     if (progressRaw && /^0?[.,]\d+$/.test(progressRaw)) progress = Math.round(parseFloat(progressRaw.replace(',', '.')) * 100);
-    const status = matchStatus(get(r, 'status')) || (progress >= 100 ? 'Done' : progress > 0 ? 'In progress' : 'Not started');
+    const status = matchStatus(get(r, 'status'), plan) || statusFromProgress(plan, progress);
     const task = createTask(plan, {
       name: name.slice(0, 500),
       level,

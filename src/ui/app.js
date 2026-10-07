@@ -4,14 +4,16 @@ import { download, safeFilename, toast, isTyping, mod, isMac } from './dom.js';
 import { createStore } from './state.js';
 import { createStorage, defaultStore } from '../io/storage.js';
 import { samplePlan } from '../model/sample.js';
-import { createPlan, createTask, normalizePlan, parsePlanJSON, serializePlan, clonePlan, uid, nowStamp, saveBaseline, clearBaseline, PALETTE, STATUSES, PLAN_STATUSES } from '../model/plan.js';
+import { createPlan, createTask, normalizePlan, parsePlanJSON, serializePlan, clonePlan, uid, nowStamp, saveBaseline, clearBaseline, PALETTE, PLAN_STATUSES } from '../model/plan.js';
+import { statusNames } from '../model/options.js';
 import { indent, outdent, deleteRows as removeRows, moveRows, isTask, descendants, ancestors } from '../model/tree.js';
 import { insertTaskBelow, insertSectionBelow } from '../model/edit.js';
 import { planStats } from '../model/stats.js';
 import { today, isISODate, mondayOf, toISO } from '../schedule/calendar.js';
 import { formatLag } from '../schedule/links.js';
 import { toCSV } from '../io/csv.js';
-import { embedPayload, extractPayload, resolveBoot, buildPayload } from '../io/standalone.js';
+import { embedPayload, extractPayload, resolveBoot, buildPayload, payloadStamp } from '../io/standalone.js';
+import { normHistory, makeVersion, appendVersion, mergeHistories, decodeSnapshot, replacePlanContents } from '../io/versions.js';
 import { createFileSaver, createHandleRegistry, initialSaveState, saveReducer, hasUnsaved, saveStatusText, suggestedFileName } from '../io/filesave.js';
 import { idbKV } from '../io/idb.js';
 import { escapeHtml as esc } from '../util/escape.js';
@@ -24,6 +26,8 @@ import { createLogs } from './logs/logs.js';
 import { modal, confirmBox, promptBox } from './dialogs/modal.js';
 import { openMenu, openPalette, closeMenu, isMenuOpen } from './dialogs/menu.js';
 import { openPasteImport } from './dialogs/paste.js';
+import { openOptionsEditor } from './dialogs/options.js';
+import { openHistoryPanel, previewVersion } from './dialogs/history.js';
 import { exportGanttPNG } from './gantt/export.js';
 import { buildPrint, clearPrint } from './print.js';
 import { columnState, columnLabel, columnOrder, moveColumn, moveColumnTo, setColumnVisible, resetColumns } from './grid/columns.js';
@@ -67,7 +71,7 @@ function layoutHTML() {
     <button type="button" class="btn plan-only" data-act="add-section" title="New section (Shift+Insert)">+ Section</button>
     <button type="button" class="btn ic plan-only" data-act="outdent" aria-label="Outdent" title="Outdent (Shift+Tab)">⇤</button>
     <button type="button" class="btn ic plan-only" data-act="indent" aria-label="Indent" title="Indent (Tab)">⇥</button>
-    <button type="button" class="btn ic plan-only" data-act="delete" aria-label="Delete selected rows" title="Delete selected rows (Delete)">✕</button>
+    <button type="button" class="btn ic plan-only" data-act="delete" aria-label="Delete selected rows" title="Delete selected rows (${K}+Delete, or Delete on the # column)">✕</button>
     <button type="button" class="btn ic" data-act="undo" aria-label="Undo" title="Undo (${K}+Z)">↶</button>
     <button type="button" class="btn ic" data-act="redo" aria-label="Redo" title="Redo (Shift+${K}+Z)">↷</button>
   </div>
@@ -89,6 +93,7 @@ function layoutHTML() {
     <select data-filter="status" aria-label="Filter by status"></select>
     <select data-filter="section" aria-label="Filter by section"></select>
     <button type="button" class="btn" data-act="f-overdue" aria-pressed="false" title="Only overdue tasks">Overdue</button>
+    <button type="button" class="btn" data-act="f-done" aria-pressed="false" title="Hide tasks whose status counts as complete">Hide completed</button>
     <button type="button" class="btn ic" data-act="f-clear" aria-label="Clear filters" title="Clear filters">⌫</button>
   </div>
 </div>
@@ -138,12 +143,14 @@ export function boot(sourceHtml) {
   // A file with an embedded plan opens that plan, unless this browser holds newer
   // saved edits of the same plan (see resolveBoot).
   let opened = null;
+  let bootHistory = [];
   const fileReport = {};
   try {
     const payload = JSON.parse(document.getElementById('pb-data').textContent || 'null');
     if (payload && payload.plan) {
       const filePlan = normalizePlan(payload.plan, fileReport);
       opened = resolveBoot({ ...payload, plan: filePlan }, storage.load(filePlan.id));
+      bootHistory = normHistory(payload.history);
     }
   } catch (e) {
     opened = null;
@@ -198,7 +205,9 @@ export function boot(sourceHtml) {
       store.selection = new Set([id]);
       store.anchor = id;
     }
+    const prev = store.active;
     store.active = { id, col: o.col || (store.active && store.active.col) || 'name' };
+    if (!o.extend || !store.cellAnchor) store.cellAnchor = o.extend && prev ? { ...prev } : { ...store.active };
     const r = d.tree.byId.get(id);
     if (o.keepCard && store.cardId != null && r && isTask(r)) store.cardId = id;
     store.ui();
@@ -573,6 +582,7 @@ export function boot(sourceHtml) {
     href: location.href,
     download: (name, html) => download(name, html, 'text/html;charset=utf-8'),
     confirm: confirmOverwrite,
+    explain: explainConnect,
   });
   let fileState = initialSaveState(!!opened && opened.source === 'saved');
   const fileStampFor = (id) => (opened && opened.file.plan.id === id ? opened.file.stamp : null);
@@ -595,20 +605,61 @@ export function boot(sourceHtml) {
     return r.value;
   }
 
+  async function explainConnect() {
+    const fileName = suggestedFileName(location.href, '');
+    const r = await modal({
+      title: 'Connect Save to this file',
+      body: `<p><b>Pick this same file once so Save can write to it from now on.</b></p><p>Browsers cannot write to a page's own file without your permission. In the next dialog choose ${fileName ? `“${esc(fileName)}” (already filled in)` : 'the .html file you opened'} and confirm replacing it.</p><p class="hint">Edge / Chrome may offer “Allow on every visit”: choose it and Save never asks again. File › Open & connect… does the same from an Open dialog.</p>`,
+      actions: [{ label: 'Cancel', value: 'cancel' }, { label: 'Pick the file…', value: 'ok', primary: true }],
+    });
+    return r.value === 'ok';
+  }
+
+  // ---- version history embedded in the file -------------------------------
+  const plainPlan = (p) => JSON.parse(serializePlan(p, false));
+  const histories = new Map(); // plan id -> { list (oldest first), base: plan as last saved / opened }
+  function historyFor(id) {
+    if (!histories.has(id)) {
+      const mine = opened && opened.file.plan.id === id;
+      histories.set(id, { list: mine ? bootHistory : [], base: mine ? plainPlan(opened.file.plan) : null });
+    }
+    return histories.get(id);
+  }
+  async function askAuthor(force = false) {
+    const cur = storage.prefs().author;
+    if (cur != null && !force) return cur;
+    const name = await promptBox('Your name for the version history', 'Name (optional, kept in this browser)', cur || '');
+    if (name == null && !force) storage.setPrefs({ author: '' });
+    if (name == null) return force ? null : '';
+    const v = name.trim().slice(0, 80);
+    storage.setPrefs({ author: v });
+    return v;
+  }
+
   async function saveToFile(saveAs = false) {
     if (store.readOnly) return store.emit('readonly');
     if (fileState.status === 'saving') return undefined;
     store.flush();
     const planId = store.plan.id;
-    const stamp = new Date().toISOString();
-    const html = embedPayload(sourceHtml, buildPayload(store.plan, { at: stamp }));
     const name = safeFilename(store.plan.name, 'html');
+    const author = await askAuthor();
+    if (store.plan.id !== planId || fileState.status === 'saving') return undefined;
     setFileState({ type: 'start' });
+    const stamp = new Date().toISOString();
+    const hist = historyFor(planId);
+    const data = plainPlan(store.plan);
     let r;
+    let list = hist.list;
     try {
+      list = appendVersion(hist.list, await makeVersion(hist.list, data, hist.base, { author, at: stamp }));
+      const html = embedPayload(sourceHtml, buildPayload(store.plan, { at: stamp, history: list }));
       r = await saver.save({ planId, html, stamp, saveAs, suggestedName: suggestedFileName(location.href, name), downloadName: name });
     } catch (e) {
       r = { status: 'failed', error: (e && e.message) || String(e) };
+    }
+    if (r.status === 'saved' || r.status === 'downloaded') {
+      hist.list = list;
+      hist.base = data;
     }
     if (store.plan.id !== planId) return undefined;
     if (r.status === 'saved') {
@@ -623,6 +674,84 @@ export function boot(sourceHtml) {
       toast(`Could not save${r.name ? ` “${r.name}”` : ''}: ${r.error}. Try File → Save as…`, 'error', 8000);
     }
     return undefined;
+  }
+
+  async function openAndConnect() {
+    if (store.readOnly) return store.emit('readonly');
+    if (typeof window.showOpenFilePicker !== 'function') return toast('This browser cannot write to files: use Edge or Chrome. Save downloads an updated copy instead.', 'warn', 7000);
+    let h;
+    try {
+      [h] = await window.showOpenFilePicker({ types: [{ description: 'Planboard plan (HTML)', accept: { 'text/html': ['.html', '.htm'] } }], multiple: false, id: 'planboard' });
+    } catch (e) {
+      if (e && e.name === 'AbortError') return undefined;
+      return toast(`Could not open the file: ${(e && e.message) || e}`, 'error');
+    }
+    try {
+      if (typeof h.requestPermission === 'function' && (await h.requestPermission({ mode: 'readwrite' })) === 'denied') return toast('Write permission was not granted, so Save cannot write to that file.', 'warn', 7000);
+    } catch (e) {
+      /* asked again on the next Save */
+    }
+    let payload = null;
+    let text = '';
+    try {
+      text = await (await h.getFile()).text();
+      payload = extractPayload(text);
+    } catch (e) {
+      return toast(`Could not read “${h.name}”.`, 'error');
+    }
+    if (!payload || !payload.plan) return toast(`“${h.name}” is not a saved planboard file.`, 'error', 6000);
+    if (payload.plan.id !== store.plan.id) {
+      if (await confirmBox(`“${h.name}” holds a different plan (“${payload.plan.name || 'untitled'}”). Open it as a plan in this browser? Save then writes to the file you are viewing, not to “${h.name}”.`, { ok: 'Open plan' })) importText(text, h.name);
+      return undefined;
+    }
+    const hist = historyFor(store.plan.id);
+    hist.list = mergeHistories(hist.list, normHistory(payload.history));
+    await saver.connect(store.plan.id, h, payloadStamp(payload));
+    updateSaveState();
+    toast(`Connected to “${h.name}”. Save (${K}+S) now writes to it without asking.`, 'info', 5000);
+    return undefined;
+  }
+
+  const snapshotPlan = async (v) => {
+    try {
+      return normalizePlan(await decodeSnapshot(v.snapshot));
+    } catch (e) {
+      toast(`Cannot open version ${v.n}: ${e.message}`, 'error');
+      return null;
+    }
+  };
+  async function restoreVersion(v) {
+    if (store.readOnly) return store.emit('readonly') && false;
+    const p = await snapshotPlan(v);
+    if (!p) return false;
+    const ok = await confirmBox(`Restore version ${v.n} (${fmtStamp(v.savedAt)})? It becomes the current plan as a new unsaved change: Undo (${K}+Z) brings back what you have now, Save keeps it.`, { ok: 'Restore', title: 'Restore version' });
+    if (!ok) return false;
+    store.commit(`Restore version ${v.n}`, (cur) => {
+      replacePlanContents(cur, p);
+    });
+    toast(`Restored version ${v.n}. Press Save to keep it, or Undo.`, 'info', 6000);
+    return true;
+  }
+  function versionHistory() {
+    const hist = historyFor(store.plan.id);
+    openHistoryPanel({
+      versions: hist.list,
+      author: storage.prefs().author || '',
+      fileName: saver.fileName || suggestedFileName(location.href, ''),
+      readOnly: store.readOnly,
+      onAuthor: () => askAuthor(true),
+      onPreview: async (v) => {
+        const p = await snapshotPlan(v);
+        if (p && (await previewVersion(p, v, { readOnly: store.readOnly })) === 'restore') {
+          if (await restoreVersion(v)) document.querySelectorAll('dialog.modal[open]').forEach((d) => d.close());
+        }
+      },
+      onRestore: restoreVersion,
+      onExport: async (v) => {
+        const p = await snapshotPlan(v);
+        if (p) download(safeFilename(`${p.name} v${v.n}`, 'json'), serializePlan(p), 'application/json');
+      },
+    });
   }
 
   function showBanner(text) {
@@ -676,6 +805,8 @@ export function boot(sourceHtml) {
         { label: 'Duplicate plan', action: duplicatePlan },
         { label: 'Rename plan…', action: renamePlan },
         { label: 'Delete plan…', danger: true, action: deletePlan },
+        { label: 'Status options…', action: () => openOptionsEditor(app, 'status') },
+        { label: 'Priority options…', action: () => openOptionsEditor(app, 'priority') },
         { sep: true },
         { heading: 'Import' },
         { label: 'Import JSON file…', hint: 'or drop a file', action: pickFile },
@@ -684,7 +815,11 @@ export function boot(sourceHtml) {
       );
     }
     items.push({ heading: 'Export' });
-    if (!ro) items.push({ label: 'Save', hint: `${K}+S`, action: () => saveToFile(false) }, { label: 'Save as…', hint: `Shift+${K}+S`, action: () => saveToFile(true) });
+    if (!ro) {
+      items.push({ label: 'Save', hint: `${K}+S`, action: () => saveToFile(false) }, { label: 'Save as…', hint: `Shift+${K}+S`, action: () => saveToFile(true) });
+      if (saver.supported) items.push({ label: saver.connected ? `Open & connect… (connected: ${saver.fileName})` : 'Open & connect…', action: openAndConnect });
+    }
+    items.push({ label: 'Version history…', action: versionHistory });
     items.push(
       { label: 'Export JSON', action: exportJSON },
       { label: 'Export CSV', action: exportCSV },
@@ -771,10 +906,11 @@ export function boot(sourceHtml) {
         items.push({ label: 'Move right', action: () => colCommit('Move column', (pl) => moveColumn(pl, c.key, 1)) });
         items.push({ label: 'Hide column', action: () => colCommit('Hide column', (pl) => (setColumnVisible(pl, c.key, false), true)) });
       }
+      if (c.key === 'status' || c.key === 'priority') items.push({ label: 'Edit options…', disabled: ro, action: () => openOptionsEditor(app, c.key) });
       if (c.field) {
         items.push({ label: 'Filter by value…', action: () => fieldFilterMenu(anchor, c.field) });
         items.push({ label: 'Rename…', disabled: ro, action: () => renameFieldUI(c.field) });
-        if (c.field.type === 'select') items.push({ label: 'Edit options…', disabled: ro, action: () => optionsUI(c.field) });
+        if (c.field.type === 'select') items.push({ label: 'Edit options…', disabled: ro, action: () => openOptionsEditor(app, c.field.id) });
         items.push({ label: 'Delete column…', danger: true, disabled: ro, action: () => deleteFieldUI(c.field) });
       }
       items.push({ sep: true });
@@ -873,26 +1009,6 @@ ${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x)
     store.commit('Rename column', (p) => renameField(p, f.id, name) || undefined, { schedule: false });
   }
 
-  async function optionsUI(f) {
-    await modal({
-      title: `Options for “${f.name}”`,
-      body: `<label class="fld">Options (one per line)<textarea class="cf-opts" rows="8" maxlength="5000">${esc(f.options.join('\n'))}</textarea></label><p class="hint">Tasks using an option you remove lose that value (Undo restores it).</p><p class="warn cf-err" aria-live="polite"></p>`,
-      actions: [{ label: 'Cancel', value: 'cancel' }, { label: 'Save options', value: 'ok', primary: true }],
-      onAction: (v, dlg) => {
-        let err = null;
-        store.commit('Edit options', (p) => {
-          err = setFieldOptions(p, f.id, dlg.querySelector('.cf-opts').value.split('\n'));
-          return err ? false : undefined;
-        }, { schedule: false });
-        if (err) {
-          dlg.querySelector('.cf-err').textContent = err;
-          return false;
-        }
-        return true;
-      },
-    });
-  }
-
   async function deleteFieldUI(f) {
     const n = store.plan.rows.filter((r) => r.values && r.values[f.id] != null).length;
     const ok = await confirmBox(`Delete the column “${f.name}”?${n ? ` Its value on ${n} task${n === 1 ? '' : 's'} will be removed.` : ''} You can undo this (${K}+Z).`, { ok: 'Delete column', danger: true, title: 'Delete column' });
@@ -972,7 +1088,7 @@ ${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x)
             const i = ord.indexOf(k);
             colCommit('Move column', (pl) => moveColumnTo(pl, k, mc === 'left' ? ord[i - 1] : ord[i + 2] ?? null));
           } else if (mc === 'rename' && f) await renameFieldUI(f);
-          else if (mc === 'opts' && f) await optionsUI(f);
+          else if (mc === 'opts' && f) await openOptionsEditor(app, f.id);
           else if (mc === 'del' && f) await deleteFieldUI(f);
           else if (mc === 'add') await addFieldUI(null);
           refresh(`[data-mc="${mc}"]${k ? `[data-k="${k}"]` : ''}`);
@@ -1065,7 +1181,7 @@ ${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x)
     store.ui(true);
   }
   function clearFilters() {
-    store.filter = { text: '', owner: '', status: '', section: '', overdue: false, field: null };
+    store.filter = { text: '', owner: '', status: '', section: '', overdue: false, hideDone: false, field: null };
     search.value = '';
     store.ui(true);
   }
@@ -1090,7 +1206,9 @@ ${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x)
 
   function showHelp() {
     const rows = [
-      ['↑ ↓ ← →', 'Move between cells (Shift+↑/↓ extends the selection)'],
+      ['↑ ↓ ← →', 'Move between cells; the grid scrolls to keep the cell in view. Shift+arrows (or Shift+click, or drag across cells) selects a range'],
+      [`${K}+C / ${K}+V / ${K}+X`, 'Copy / paste / cut cells as tab-separated text (works with Excel and Sheets). One copied value fills the whole selected range'],
+      [`${K}+D`, 'Fill down from the top cell of the range (or drag the small square at its bottom-right corner)'],
       ['Double-click', 'Edit a cell (read-only cells open the task details)'],
       ['↗ / Enter', 'Open task details from the task name (Enter on other cells edits them; Shift+Enter always opens)'],
       ['F2', 'Edit the selected cell'],
@@ -1099,7 +1217,7 @@ ${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x)
       ['Esc', 'Cancel editing / close the card. Press again to let Tab leave the grid'],
       ['Tab / Shift+Tab', 'Indent / outdent the selected tasks'],
       [`Insert or ${K}+Enter`, 'New task below; Shift+Insert = new section'],
-      ['Delete', 'Delete the selected rows (asks first)'],
+      ['Delete / Backspace', 'Clear the selected cells. On the # column, or with Ctrl, delete the selected rows (asks first)'],
       ['Alt+Shift+↑/↓', 'Move rows up / down'],
       ['Alt+← / Alt+→ or Space', 'Collapse / expand a summary task or section'],
       [`${K}+Z / Shift+${K}+Z`, 'Undo / redo (also Ctrl+Y)'],
@@ -1116,7 +1234,7 @@ ${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x)
     modal({
       title: 'Keyboard shortcuts & tips',
       wide: true,
-      body: `<table class="kbd-table">${rows.map(([k, v]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(v)}</td></tr>`).join('')}</table><h3 class="help-h">How to share</h3><ol class="help-share"><li>Put this .html file on OneDrive, Teams or SharePoint (or any shared folder).</li><li>Open it in Edge or Chrome, for example from the synced OneDrive folder.</li><li>Edit, then press <b>Save</b> (${esc(K)}+S). The first time, pick the original file to overwrite it; after that Save writes straight to it.</li><li>In Safari or Firefox, Save downloads an updated copy: replace the original file with it.</li></ol><p class="hint">Edits are also autosaved in this browser (localStorage) as a safety net. Export JSON for backups; File → Export read-only presenter copy makes a version others cannot edit.</p>`,
+      body: `<table class="kbd-table">${rows.map(([k, v]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(v)}</td></tr>`).join('')}</table><h3 class="help-h">How to share</h3><ol class="help-share"><li>Put this .html file on OneDrive, Teams or SharePoint (or any shared folder).</li><li>Open it in Edge or Chrome, for example from the synced OneDrive folder.</li><li>Edit, then press <b>Save</b> (${esc(K)}+S). The first time, pick the original file once (or use File › Open & connect…); after that Save writes straight to it. Every Save adds a version to File › Version history.</li><li>In Safari or Firefox, Save downloads an updated copy: replace the original file with it.</li></ol><p class="hint">Edits are also autosaved in this browser (localStorage) as a safety net. Export JSON for backups; File → Export read-only presenter copy makes a version others cannot edit.</p>`,
       actions: [{ label: 'Close', value: 'cancel', primary: true }],
     });
   }
@@ -1156,6 +1274,7 @@ ${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x)
     columns: columnsMenu,
     conflicts: conflictsMenu,
     'f-overdue': () => setFilter('overdue', !store.filter.overdue),
+    'f-done': () => setFilter('hideDone', !store.filter.hideDone),
     'f-clear': clearFilters,
     file: fileMenu,
     plans: plansMenu,
@@ -1302,6 +1421,7 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
     pressed('auto', s.autoSchedule);
     pressed('critical', s.showCritical);
     pressed('f-overdue', store.filter.overdue);
+    pressed('f-done', store.filter.hideDone);
     pressed('present', store.presenter);
     const act = store.active && store.selection.size === 1 ? store.d.tree.byId.get(store.active.id) : null;
     q('.tb-open').hidden = !act || !isTask(act) || store.cardId === act.id;
@@ -1313,7 +1433,7 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
     root.querySelectorAll('[data-set]').forEach((sel) => setVal(sel, s[sel.dataset.set]));
     const tasks = store.d.tree.tasks;
     fillSelect(q('[data-filter="owner"]'), [...new Set(tasks.map((t) => t.owner).filter(Boolean))].sort().map((o) => [o, o]), 'All owners');
-    fillSelect(q('[data-filter="status"]'), STATUSES.map((x) => [x, x]), 'All statuses');
+    fillSelect(q('[data-filter="status"]'), statusNames(store.plan).map((x) => [x, x]), 'All statuses');
     fillSelect(q('[data-filter="section"]'), store.plan.rows.filter((r) => !isTask(r)).map((r) => [String(r.id), r.name]), 'All sections');
     if (document.activeElement !== search) search.value = store.filter.text;
     q('.filters').classList.toggle('active', !!store.d.matches);

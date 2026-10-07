@@ -3,6 +3,7 @@ import { computeTree, normalizeLevels, visibleRows } from '../model/tree.js';
 import { rollup, autoSchedule, findConflicts, sanitizeLinks } from '../schedule/engine.js';
 import { criticalPath } from '../schedule/critical.js';
 import { matchTasks } from '../model/stats.js';
+import { isComplete, summaryStatus } from '../model/options.js';
 import { nowStamp, normalizePlan } from '../model/plan.js';
 import { createHistory, MAX_HISTORY_STEPS } from '../model/history.js';
 
@@ -22,8 +23,9 @@ export function createStore({ plan, storage, readOnly = false, embedded = false,
     selection: new Set(),
     active: null, // { id, col }
     anchor: null,
+    cellAnchor: null, // { id, col }: the other corner of the grid cell range
     view: 'plan',
-    filter: { text: '', owner: '', status: '', section: '', overdue: false, field: null },
+    filter: { text: '', owner: '', status: '', section: '', overdue: false, hideDone: false, field: null },
     cardId: null,
     d: null,
     saveState: 'saved',
@@ -62,7 +64,9 @@ export function createStore({ plan, storage, readOnly = false, embedded = false,
       const sid = tree.sectionOf.get(t.id);
       if (sid != null) sectionColor.set(t.id, tree.byId.get(sid).color);
     }
-    s.d = { tree, conflicts, conflictKeys, critical, matches, visible, indexOf, sectionColor, moved };
+    const done = new Set();
+    for (const t of tree.tasks) if (isComplete(s.plan, tree.isSummary(t.id) ? summaryStatus(tree, t.id, s.plan) : t.status)) done.add(t.id);
+    s.d = { tree, conflicts, conflictKeys, critical, matches, visible, indexOf, sectionColor, moved, done };
     for (const id of [...s.selection]) if (!tree.byId.has(id)) s.selection.delete(id);
     if (s.active && !tree.byId.has(s.active.id)) s.active = null;
     if (s.cardId != null && !tree.byId.has(s.cardId)) s.cardId = null;
@@ -168,6 +172,7 @@ export function createStore({ plan, storage, readOnly = false, embedded = false,
     s.redoStack = [];
     s.selection.clear();
     s.active = null;
+    s.cellAnchor = null;
     s.cardId = null;
     s.derive(true);
     if (opts.save !== false) s.persist();

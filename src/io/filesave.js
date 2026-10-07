@@ -144,8 +144,12 @@ async function ensurePermission(h) {
 const PICKER_TYPES = [{ description: 'Planboard plan (HTML)', accept: { 'text/html': ['.html', '.htm'] } }];
 
 /**
- * env: { showSaveFilePicker (null when unsupported), registry, href, download(name, text), confirm(conflict) -> 'overwrite'|'saveas'|'cancel' }
- * save() resolves { status: 'saved'|'downloaded'|'cancelled'|'failed', name?, reason?, error? }.
+ * env: { showSaveFilePicker (null when unsupported), registry, href, download(name, text),
+ *        confirm(conflict) -> 'overwrite'|'saveas'|'cancel',
+ *        explain() -> true to continue (optional; shown before the one-time picker of a plain Save) }
+ * save() resolves { status: 'saved'|'downloaded'|'cancelled'|'failed', name?, reason?, error?, picked? }.
+ * A remembered handle is written silently; permission "prompt" asks via requestPermission
+ * (a small allow prompt, not a picker). Only a Save without any handle, or Save as, opens the picker.
  */
 export function createFileSaver(env) {
   const supported = typeof env.showSaveFilePicker === 'function';
@@ -163,6 +167,18 @@ export function createFileSaver(env) {
     supported,
     get fileName() {
       return handle ? handle.name : '';
+    },
+    get connected() {
+      return !!handle;
+    },
+    /** Remember `h` (e.g. from File › Open & connect) as the file of the bound plan. */
+    async connect(id, h, stamp) {
+      await ready;
+      if (id !== planId) return false;
+      handle = h;
+      if (stamp) known.add(stamp);
+      await env.registry.put(id, env.href, h, stamp);
+      return true;
     },
     /** Point at a plan: loads its remembered handle. `openedStamp` = stamp of the file payload shown. */
     bind(id, openedStamp) {
@@ -200,7 +216,10 @@ export function createFileSaver(env) {
           else if (choice !== 'overwrite') return { status: 'cancelled' };
         }
       }
+      let picked = false;
       if (!h) {
+        if (!o.saveAs && env.explain && !(await env.explain())) return { status: 'cancelled' };
+        picked = true;
         try {
           h = await env.showSaveFilePicker({ suggestedName: o.suggestedName, types: PICKER_TYPES, id: 'planboard' });
         } catch (e) {
@@ -221,7 +240,7 @@ export function createFileSaver(env) {
         known.add(o.stamp);
       }
       await env.registry.put(o.planId, env.href, h, o.stamp);
-      return { status: 'saved', name: h.name };
+      return { status: 'saved', name: h.name, picked };
     },
   };
 }

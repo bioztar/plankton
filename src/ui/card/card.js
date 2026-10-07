@@ -4,7 +4,7 @@
 import { escapeHtml as esc } from '../../util/escape.js';
 import { sanitizeHtml } from '../../util/sanitize.js';
 import { safeUrl } from '../../util/markdown.js';
-import { STATUSES, PRIORITIES } from '../../model/plan.js';
+import { statusNames, priorityNames } from '../../model/options.js';
 import { setTaskField, resolveRef, addLink, removeLink, setPredsFromText, predsText } from '../../model/edit.js';
 import { setFieldValue, findField, formatValue } from '../../model/fields.js';
 import { LINK_TYPES, LINK_LABELS } from '../../schedule/links.js';
@@ -41,7 +41,10 @@ export function createCard(app, root) {
     onChange: (html, id) => store.commit('Edit description', (plan) => {
       const t = plan.rows.find((r) => r.id === id);
       if (!t) return false;
-      return setTaskField(t, 'descHtml', html) || undefined;
+      const rep = {};
+      sanitizeHtml(html, rep);
+      if (rep.truncated) setTimeout(() => app.toast('The description was too long and has been shortened. Undo restores the previous text.', 'warn', 8000));
+      return setTaskField(t, 'descHtml', html, undefined, plan) || undefined;
     }),
   });
 
@@ -95,8 +98,8 @@ ${fs('Start', `<input type="date" data-f="start" data-key="start" value="${t.sta
 ${fs('Finish', `<input type="date" data-f="finish" data-key="finish" value="${t.finish}"${dis(summary || t.milestone)}>`)}
 ${fs('Duration', `<input type="number" min="0" step="1" data-f="duration" data-key="duration" value="${t.duration}" title="Working days"${dis(summary)}>`, ' w-xs')}
 ${fs('Progress %', `<input type="number" min="0" max="100" step="5" data-f="progress" data-key="progress" value="${t.progress}"${dis(summary)}>`, ' w-xs')}
-${fs('Status', `<select data-f="status" data-key="status"${dis(summary)}>${opt(STATUSES, t.status)}</select>`)}
-${fs('Priority', `<select data-f="priority" data-key="priority"${dis()}>${opt(PRIORITIES, t.priority)}</select>`)}
+${fs('Status', `<select data-f="status" data-key="status"${dis(summary)}>${opt(statusNames(store.plan), t.status)}</select>`)}
+${fs('Priority', `<select data-f="priority" data-key="priority"${dis()}>${opt(priorityNames(store.plan), t.priority)}</select>`)}
 ${fs('Owner', `<input data-f="owner" data-key="owner" value="${esc(t.owner)}" list="dl-owners"${dis()}>`)}
 ${fs('Workstream', `<input data-f="workstream" data-key="workstream" value="${esc(t.workstream)}" list="dl-streams"${dis()}>`)}
 <label class="fs fs-chk"><span>Milestone</span><input type="checkbox" data-f="milestone" data-key="milestone"${t.milestone ? ' checked' : ''}${dis(summary)}></label>
@@ -207,7 +210,7 @@ ${ro ? '' : `<div class="pr-add-row"><input class="pr-add" data-key="pr-add" pla
       pin = prev && prev !== f ? prev : undefined;
       pinned.set(id, f);
     }
-    commitTask(`Edit ${f}`, (t) => setTaskField(t, f, v, pin) || undefined);
+    commitTask(`Edit ${f}`, (t) => setTaskField(t, f, v, pin, store.plan) || undefined);
     return undefined;
   });
 

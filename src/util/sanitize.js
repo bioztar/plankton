@@ -1,10 +1,12 @@
 // Strict allow-list HTML sanitizer for task descriptions (pasted Word / Outlook /
 // OneNote / web content and stored HTML). Input is parsed with DOMParser (inert:
-// no scripts run, nothing loads) and the output is rebuilt from scratch: only the
+// no scripts run, nothing loads), or by the built-in parser in htmlparse.js where
+// there is no DOM (Node), and the output is rebuilt from scratch: only the
 // allow-listed tags and attributes are written, all text is escaped, so nothing
 // from the input can reach the output except through this code.
 import { escapeHtml } from './escape.js';
 import { safeUrl } from './markdown.js';
+import { parseHTML, decodeEntities } from './htmlparse.js';
 
 export const ALLOWED_TAGS = [
   'h1', 'h2', 'h3', 'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'ul', 'ol', 'li', 'blockquote', 'pre', 'code',
@@ -36,7 +38,7 @@ const classOf = (n) => String(attr(n, 'class') || '').toLowerCase();
 
 function parse(html) {
   const P = globalThis.DOMParser;
-  if (!P) return null;
+  if (!P) return parseHTML(html);
   return new P().parseFromString(`<!DOCTYPE html><html><body>${html}</body></html>`, 'text/html');
 }
 
@@ -284,24 +286,75 @@ function tableRows(table, ctx) {
     .join('');
 }
 
+// Only used with String#replace (which resets lastIndex); never with .test().
 const EMPTY_INLINE = /<(strong|em|u|s|code|a)\b[^>]*>(\s*)<\/\1>/g;
 const TRAILING_BR = /(?<!<(p|li|td|th|h[123])>)(?:<br>)+<\/(p|li|td|th|h[123]|pre)>/g;
 
 function tidy(html) {
   let s = html;
-  for (let k = 0; k < 4 && EMPTY_INLINE.test(s); k++) s = s.replace(EMPTY_INLINE, '$2');
+  for (let k = 0; k < 4; k++) {
+    const next = s.replace(EMPTY_INLINE, '$2');
+    if (next === s) break;
+    s = next;
+  }
   return s.replace(TRAILING_BR, '</$2>').replace(/<p>\s*<\/p>/g, '').trim();
 }
 
-/** Sanitize untrusted HTML to the description allow-list. Returns an HTML string. */
-export function sanitizeHtml(input) {
+/**
+ * Sanitize untrusted HTML to the description allow-list. Returns an HTML string.
+ * Over-long input is cut to MAX_DESC_HTML; pass `report` to learn about it
+ * (`report.truncated = true`).
+ */
+export function sanitizeHtml(input, report) {
   const src = String(input == null ? '' : input);
   if (!src.trim()) return '';
+  if (src.length > MAX_DESC_HTML * 4 && report) report.truncated = true;
   const doc = parse(src.slice(0, MAX_DESC_HTML * 4));
-  if (!doc || !doc.body) return src.trim() ? `<p>${escapeHtml(src.replace(CONTROL, ''))}</p>` : '';
   let out = tidy(children(doc.body, { depth: 0 }));
-  if (out.length > MAX_DESC_HTML) out = sanitizeHtml(out.slice(0, MAX_DESC_HTML));
+  if (out.length > MAX_DESC_HTML) {
+    if (report) report.truncated = true;
+    // Cut the clean HTML and re-sanitize (closes the open tags); shrink the cut
+    // until the closing tags fit too.
+    let budget = MAX_DESC_HTML;
+    do {
+      budget -= Math.max(64, out.length - MAX_DESC_HTML);
+      out = tidy(children(parse(out.slice(0, Math.max(0, budget))).body, { depth: 0 }));
+    } while (out.length > MAX_DESC_HTML && budget > 0);
+  }
   return out;
+}
+
+// Descriptions damaged by v1.2's DOM-less fallback hold their own HTML as
+// escaped text, wrapped in <p> once per bad round trip: <p>&lt;p&gt;x…</p>.
+const ESCAPED_LAYER = /^<p>([^<]*)<\/p>$/;
+const HTML_START = /^\s*<(p|h[1-6]|ul|ol|li|div|table|thead|tbody|tr|blockquote|pre|hr|br|section|article)(\s[^<>]*)?\/?>/i;
+export const MAX_REPAIR_LEVELS = 6;
+
+/**
+ * Undo up to MAX_REPAIR_LEVELS layers of escaped HTML in sanitized description
+ * HTML. A layer is only decoded when its whole text is markup: it starts with a
+ * block tag and ends with ">". Text such as "<CR>" or "a < b" is left alone.
+ * Returns { html, levels }.
+ */
+export function repairEscapedHtml(html) {
+  let s = String(html || '');
+  let levels = 0;
+  while (levels < MAX_REPAIR_LEVELS) {
+    const m = ESCAPED_LAYER.exec(s);
+    if (!m) break;
+    const inner = decodeEntities(m[1]).trim();
+    if (!HTML_START.test(inner) || !inner.endsWith('>')) break;
+    s = sanitizeHtml(inner);
+    levels++;
+  }
+  return { html: s, levels };
+}
+
+/** Stored description → clean HTML: sanitize, then repair escaped layers. */
+export function cleanDescHtml(input, report) {
+  const r = repairEscapedHtml(sanitizeHtml(input, report));
+  if (report && r.levels) report.repaired = (report.repaired || 0) + 1;
+  return r.html;
 }
 
 const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", nbsp: ' ' };

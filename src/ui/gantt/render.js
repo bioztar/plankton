@@ -25,6 +25,9 @@ export const GANTT_CSS = `
 .gsvg .sum .b{fill:var(--summary)}
 .gsvg .sum .pg{fill:var(--accent);fill-opacity:.9}
 .gsvg .ms .b{fill:var(--milestone)}
+.gsvg .done .b,.gsvg .done.ms .b,.gsvg .done.sum .b{fill:var(--done-bar)}
+.gsvg .ck{fill:#fff;font-size:10px;font-weight:700;pointer-events:none}
+.gsvg .ms .ck{font-size:8px}
 .gsvg .crit .b{stroke:var(--crit);stroke-width:2.2}
 .gsvg .sel .b{stroke:var(--accent);stroke-width:2.2}
 .gsvg .bl{fill:var(--baseline);fill-opacity:.7}
@@ -195,10 +198,11 @@ export function renderGantt(o) {
     const cy = y + rowH / 2;
     const b = barGeom(t, range, ppd);
     const summary = tree.isSummary(t.id);
-    const cls = ['bar', summary ? 'sum' : '', b.ms ? 'ms' : '', crit && crit.tasks.has(t.id) ? 'crit' : '', o.selection && o.selection.has(t.id) ? 'sel' : '']
+    const done = !!(o.done && o.done.has(t.id));
+    const cls = ['bar', summary ? 'sum' : '', b.ms ? 'ms' : '', done ? 'done' : '', crit && crit.tasks.has(t.id) ? 'crit' : '', o.selection && o.selection.has(t.id) ? 'sel' : '']
       .filter(Boolean)
       .join(' ');
-    const color = !summary && !b.ms && o.sectionColor && o.sectionColor.get(t.id);
+    const color = !done && !summary && !b.ms && o.sectionColor && o.sectionColor.get(t.id);
     const fill = color ? ` style="fill:${color}"` : '';
     const parts = [];
     if (o.showBaseline && t.baseline) {
@@ -209,6 +213,7 @@ export function renderGantt(o) {
     if (b.ms) {
       const r = 7;
       parts.push(`<path class="b" d="M${r1(b.cx)},${r1(cy - r)}L${r1(b.cx + r)},${r1(cy)}L${r1(b.cx)},${r1(cy + r)}L${r1(b.cx - r)},${r1(cy)}z"/>`);
+      if (done) parts.push(`<text class="ck" x="${r1(b.cx)}" y="${r1(cy + 3)}" text-anchor="middle">✓</text>`);
     } else if (summary) {
       const ty = r1(cy - 5);
       const h = 7;
@@ -216,12 +221,14 @@ export function renderGantt(o) {
       const x2 = r1(b.x2);
       const tip = Math.min(5, (x2 - x1) / 2);
       parts.push(`<path class="b" d="M${x1},${ty}H${x2}V${ty + h + 5}L${r1(x2 - tip)},${ty + h}H${r1(x1 + tip)}L${x1},${ty + h + 5}z"/>`);
-      if (t.progress > 0) parts.push(`<rect class="pg" x="${x1}" y="${ty + 2}" width="${r1(((x2 - x1) * t.progress) / 100)}" height="3"/>`);
+      if (t.progress > 0 && !done) parts.push(`<rect class="pg" x="${x1}" y="${ty + 2}" width="${r1(((x2 - x1) * t.progress) / 100)}" height="3"/>`);
     } else {
       const by = r1(cy - bh / 2);
       const w = r1(b.x2 - b.x1);
       parts.push(`<rect class="b" x="${r1(b.x1)}" y="${by}" width="${w}" height="${bh}" rx="3"${fill}/>`);
-      if (t.progress > 0) parts.push(`<rect class="pg" x="${r1(b.x1)}" y="${r1(cy + bh / 2 - 4)}" width="${r1((w * t.progress) / 100)}" height="4" rx="1"/>`);
+      if (done) {
+        if (w >= 14) parts.push(`<text class="ck" x="${r1(b.x1 + 4)}" y="${r1(cy + 3.5)}">✓</text>`);
+      } else if (t.progress > 0) parts.push(`<rect class="pg" x="${r1(b.x1)}" y="${r1(cy + bh / 2 - 4)}" width="${r1((w * t.progress) / 100)}" height="4" rx="1"/>`);
       if (o.interactive) parts.push(`<rect class="rz" x="${r1(b.x2 - 5)}" y="${by}" width="7" height="${bh}"/>`);
     }
     if (o.interactive) {

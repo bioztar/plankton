@@ -4,9 +4,19 @@ import { variance } from '../model/stats.js';
 import { formatValue } from '../model/fields.js';
 import { descText } from '../util/sanitize.js';
 
+// Spreadsheet formula injection guard: prefix ' to text a spreadsheet would
+// evaluate. Plain numbers ("-2") and list bullets ("- item", "+ item") are kept
+// unless they also contain formula / DDE syntax.
+export function needsFormulaGuard(s) {
+  if (/^[=@\t\r]/.test(s)) return true;
+  if (!/^[+-]/.test(s)) return false;
+  if (/^[+-]\d+([.,]\d+)?%?$/.test(s)) return false;
+  return !(/^[+-] /.test(s) && !/[=|!@]|\w\s*\(/.test(s));
+}
+
 function cell(v) {
   let s = v == null ? '' : String(v);
-  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // spreadsheet formula injection guard
+  if (needsFormulaGuard(s)) s = "'" + s;
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

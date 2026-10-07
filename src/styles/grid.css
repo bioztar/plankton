@@ -71,3 +71,29 @@
 .hint-bar { display: flex; align-items: center; gap: 10px; padding: 6px 12px; background: var(--sel); border-bottom: 1px solid var(--line); font-size: 13px; }
 .hint-bar[hidden] { display: none; }
 .hint-bar .hint-text { flex: 1; }
+/* pinned # and name columns stay visible while scrolling horizontally */
+.gc.pin { position: sticky; z-index: 1; background-color: inherit; }
+.gh.pin { position: sticky; z-index: 4; background: var(--panel); }
+.gc.c-num.pin, .gh.pin[data-col="num"] { left: 0; }
+.gc.c-name.pin, .gh.pin[data-col="name"] { left: var(--pinw, 52px); }
+.gc.c-name.pin { box-shadow: 1px 0 0 var(--line); }
+.gr.task[style*="--tint"] .gc.pin { background-image: linear-gradient(color-mix(in srgb, var(--tint) 7%, transparent), color-mix(in srgb, var(--tint) 7%, transparent)); }
+/* complete tasks */
+.gr.done { background: var(--done-row); }
+.gr.done.sel { background: var(--done-row-sel); }
+.done-ck { color: var(--ok); font-weight: 700; margin-right: 4px; flex: none; }
+.gr.done .c-name .nm { color: var(--fg); }
+.pill.opt { color: color-mix(in srgb, var(--opt) 70%, var(--fg)); border-color: var(--opt); background: color-mix(in srgb, var(--opt) 14%, transparent); }
+.prio.opt { color: color-mix(in srgb, var(--opt) 75%, var(--fg)); }
+.gc.c-status.tinted { background-image: linear-gradient(color-mix(in srgb, var(--opt) 10%, transparent), color-mix(in srgb, var(--opt) 10%, transparent)); }
+/* cell range */
+.gc.rg { background-image: linear-gradient(color-mix(in srgb, var(--accent) 12%, transparent), color-mix(in srgb, var(--accent) 12%, transparent)); }
+.gc.rg::after { content: ""; position: absolute; inset: 0; pointer-events: none; border: 0 solid var(--accent); }
+.gc.rg-t::after { border-top-width: 2px; }
+.gc.rg-b::after { border-bottom-width: 2px; }
+.gc.rg-l::after { border-left-width: 2px; }
+.gc.rg-r::after { border-right-width: 2px; }
+.gc.rg-fill::after { content: ""; position: absolute; inset: 0; pointer-events: none; border: 1px dashed var(--accent); }
+.fill-h { position: absolute; right: 0; bottom: 0; width: 7px; height: 7px; background: var(--accent); border: 1px solid var(--bg); cursor: crosshair; z-index: 2; }
+.readonly .fill-h { display: none; }
+.g-body.cell-drag { cursor: cell; user-select: none; }

@@ -3,30 +3,30 @@
 import { parseLinkList, formatLink, LINK_TYPES } from '../schedule/links.js';
 import { linkError } from '../schedule/engine.js';
 import { computeTree, leavesOf, insertionPoint, isTask, blockRange } from './tree.js';
-import { createTask, createSection, STATUSES, PRIORITIES } from './plan.js';
-import { sanitizeHtml, MAX_DESC_HTML } from '../util/sanitize.js';
+import { createTask, createSection } from './plan.js';
+import { statusNames, priorityNames, matchOption, isComplete } from './options.js';
+import { sanitizeHtml } from '../util/sanitize.js';
 import {
   clampDuration, clampLag, parseISO, toISO, isISODate, nextWorkday, wdIndex, fromWdIndex, applyDateEdit, finishFromDuration, durationFromDates,
 } from '../schedule/calendar.js';
 
-/** Keep status and progress consistent after one of them changed. */
-export function syncStatus(task, changed) {
-  if (changed === 'progress') {
-    if (task.progress >= 100) task.status = 'Done';
-    else if (task.status === 'Done') task.status = task.progress > 0 ? 'In progress' : 'Not started';
-    else if (task.progress > 0 && task.status === 'Not started') task.status = 'In progress';
-  } else if (changed === 'status') {
-    if (task.status === 'Done') task.progress = 100;
-    else if (task.status === 'Not started') task.progress = 0;
-    else if (task.progress >= 100) task.progress = 90;
-  }
+/**
+ * After a status change: a status that counts as complete sets progress to 100,
+ * the first status (e.g. Not started) sets 0, and leaving complete drops 100 to 90.
+ * Progress edits never change the status.
+ */
+export function syncStatus(task, plan) {
+  if (isComplete(plan, task.status)) task.progress = 100;
+  else if (task.status === statusNames(plan)[0]) task.progress = 0;
+  else if (task.progress >= 100) task.progress = 90;
 }
 
 /**
  * Apply a user edit to a task field. Returns an error string or null.
- * `pinned` is the date field to keep when start/finish/duration change.
+ * `pinned` is the date field to keep when start/finish/duration change; `plan`
+ * supplies the Status / Priority option lists (defaults when omitted).
  */
-export function setTaskField(task, field, value, pinned) {
+export function setTaskField(task, field, value, pinned, plan) {
   switch (field) {
     case 'name':
       task.name = String(value).trim().slice(0, 500);
@@ -47,20 +47,26 @@ export function setTaskField(task, field, value, pinned) {
     }
     case 'progress': {
       const n = parseInt(String(value).replace('%', ''), 10);
-      if (!Number.isFinite(n)) return 'Progress is a number from 0 to 100.';
-      task.progress = Math.max(0, Math.min(100, n));
-      syncStatus(task, 'progress');
+      if (!/^\s*-?\d+(\.\d+)?\s*%?\s*$/.test(String(value)) || !Number.isFinite(n)) return 'Progress is a number from 0 to 100.';
+      const v = Math.max(0, Math.min(100, n));
+      if (v < 100 && isComplete(plan, task.status)) return `Status “${task.status}” counts as complete, so progress stays 100 %. Change the status first.`;
+      task.progress = v;
       return null;
     }
-    case 'status':
-      if (!STATUSES.includes(value)) return 'Unknown status.';
-      task.status = value;
-      syncStatus(task, 'status');
+    case 'status': {
+      const s = matchOption(statusNames(plan), value);
+      if (!s) return `Unknown status “${String(value).slice(0, 60)}” (choose ${statusNames(plan).join(', ')}).`;
+      if (s === task.status) return null;
+      task.status = s;
+      syncStatus(task, plan);
       return null;
-    case 'priority':
-      if (!PRIORITIES.includes(value)) return 'Unknown priority.';
-      task.priority = value;
+    }
+    case 'priority': {
+      const s = matchOption(priorityNames(plan), value);
+      if (!s) return `Unknown priority “${String(value).slice(0, 60)}” (choose ${priorityNames(plan).join(', ')}).`;
+      task.priority = s;
       return null;
+    }
     case 'milestone':
       task.milestone = !!value;
       if (task.milestone) {
@@ -79,9 +85,8 @@ export function setTaskField(task, field, value, pinned) {
       task[field] = String(value).trim().slice(0, 200);
       return null;
     case 'descHtml': {
-      const h = sanitizeHtml(value);
-      if (h.length > MAX_DESC_HTML) return 'Description is too long.';
-      task.descHtml = h;
+      // over-long text is cut to MAX_DESC_HTML; the editor warns (see card.js)
+      task.descHtml = sanitizeHtml(value);
       return null;
     }
     case 'notes':

@@ -40,7 +40,7 @@ export function buildPrint(app, root) {
     }
     const { svg } = renderGantt({
       rows, tree: d.tree, from, to, range, ppd, rowH: ROW_H, header: true, indexOf: d.indexOf, sectionColor: d.sectionColor,
-      critical: d.critical, conflicts: d.conflictKeys, showBaseline: plan.settings.showBaseline, labelMode: plan.settings.labelMode,
+      critical: d.critical, done: d.done, conflicts: d.conflictKeys, showBaseline: plan.settings.showBaseline, labelMode: plan.settings.labelMode,
       todayDay: app.todayDay(), prefix: `p${p}`,
     });
     out.push(`<section class="pp">

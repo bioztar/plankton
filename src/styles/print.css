@@ -2,7 +2,7 @@
   @page { size: landscape; margin: 9mm; }
   :root, :root[data-theme="dark"] {
     --bg: #ffffff; --panel: #f3f4f6; --panel2: #e5e7eb; --fg: #111827; --muted: #4b5563; --line: #cfd4dc; --grid: #e5e7eb;
-    --accent: #2b5fd4; --bar: #5a83de; --summary: #333b4b; --milestone: #7a3fd1; --crit: #d0306a; --conf: #e03131;
+    --accent: #2b5fd4; --bar: #5a83de; --summary: #333b4b; --milestone: #7a3fd1; --done-bar: #2f9e44; --crit: #d0306a; --conf: #e03131;
     --today: #e8590c; --weekend: rgba(30, 40, 60, 0.07); --baseline: #98a1b0; --link: #5b6478;
     color-scheme: light;
   }
