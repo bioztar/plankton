@@ -1,14 +1,18 @@
 // Task grid: virtualised rows, inline editing, keyboard navigation, drag-and-drop
 // reordering / re-parenting and column resize.
 import { escapeHtml as esc } from '../../util/escape.js';
-import { visibleColumns } from './columns.js';
+import { visibleColumns, moveColumnTo } from './columns.js';
+import { clickAction, keyAction } from './edittrigger.js';
+import { findField, formatValue, setFieldValue } from '../../model/fields.js';
+import { descText } from '../../util/sanitize.js';
+import { safeUrl } from '../../util/markdown.js';
 import { fmtDate, fmtVariance, statusSlug } from '../format.js';
 import { predsText, setTaskField, setPredsFromText } from '../../model/edit.js';
 import { moveRows, isTask } from '../../model/tree.js';
 import { STATUSES, PRIORITIES } from '../../model/plan.js';
 import { variance, isOverdue, statusDay } from '../../model/stats.js';
 import { parseISO, toYMD } from '../../schedule/calendar.js';
-import { mod } from '../dom.js';
+import { mod, isTyping } from '../dom.js';
 
 const OVERSCAN = 10;
 const HEAD_H = 44;
@@ -28,13 +32,14 @@ export function summaryStatus(tree, id) {
 
 export function createGrid(app, root) {
   const store = app.store;
-  root.innerHTML = `<div class="g-scroll"><div class="g-head" role="row"></div><div class="g-body" tabindex="0" role="grid" aria-label="Tasks. Arrow keys move, Enter edits, Tab indents, Insert adds a row." aria-multiselectable="true"><div class="g-rows" role="rowgroup"></div><div class="drop-line" hidden></div></div><div class="g-empty" hidden></div></div>`;
+  root.innerHTML = `<div class="g-scroll"><div class="g-head" role="row"></div><div class="g-body" tabindex="0" role="grid" aria-label="Tasks. Arrow keys move, Enter edits, Tab indents, Insert adds a row." aria-multiselectable="true"><div class="g-rows" role="rowgroup"></div><div class="drop-line" hidden></div></div><div class="g-empty" hidden></div></div><div class="g-tip" role="tooltip" hidden></div>`;
   const scroll = root.querySelector('.g-scroll');
   const head = root.querySelector('.g-head');
   const body = root.querySelector('.g-body');
   const rowsEl = root.querySelector('.g-rows');
   const dropLine = root.querySelector('.drop-line');
   const empty = root.querySelector('.g-empty');
+  const tipEl = root.querySelector('.g-tip');
   let win = { from: -1, to: -1 };
   let cols = [];
   let editing = null;
@@ -42,6 +47,7 @@ export function createGrid(app, root) {
   let suppressClick = false;
 
   const rowH = () => app.rowH();
+  const colDef = (key) => cols.find((x) => x.key === key);
 
   function canEdit(r, col) {
     if (!r) return false;
@@ -64,7 +70,7 @@ export function createGrid(app, root) {
         const tog = summary
           ? `<button type="button" class="tog" data-act="toggle" tabindex="-1" aria-expanded="${!t.collapsed}" aria-label="${t.collapsed ? 'Expand' : 'Collapse'} ${esc(t.name)}">${t.collapsed ? '▸' : '▾'}</button>`
           : '<span class="tog-sp"></span>';
-        return `<span class="ind" style="width:${t.level * 18}px"></span>${tog}${t.milestone ? '<span class="ms-ic" title="Milestone">◆</span>' : ''}<span class="nm">${esc(t.name) || '<span class="muted">(untitled)</span>'}</span>`;
+        return `<span class="ind" style="width:${t.level * 18}px"></span>${tog}${t.milestone ? '<span class="ms-ic" title="Milestone">◆</span>' : ''}<span class="nm">${esc(t.name) || '<span class="muted">(untitled)</span>'}</span>${t.descHtml ? '<span class="has-desc" title="Has a description" aria-hidden="true">≡</span>' : ''}<button type="button" class="open-btn" data-act="card" tabindex="-1" title="Open task details (Enter)" aria-label="Open details for ${esc(t.name || 'task')}">↗</button>`;
       }
       case 'start':
         return esc(fmtDate(t.start, ctx.year));
@@ -93,8 +99,20 @@ export function createGrid(app, root) {
       case 'id':
         return `#${t.id}`;
       default:
-        return '';
+        return c.field ? customCell(t, c.field) : '';
     }
+  }
+
+  function customCell(t, f) {
+    const v = t.values ? t.values[f.id] : undefined;
+    if (f.type === 'checkbox') return `<span class="cf-chk" data-act="check" role="checkbox" aria-checked="${!!v}" aria-label="${esc(f.name)}">${v ? '☑' : '☐'}</span>`;
+    if (v == null || v === '') return '';
+    if (f.type === 'url') {
+      const href = safeUrl(v);
+      return href ? `<a class="cf-url" href="${esc(href)}" target="_blank" rel="noopener noreferrer" tabindex="-1" title="${esc(href)}">${esc(String(v).replace(/^https?:\/\//, ''))}</a>` : esc(v);
+    }
+    if (f.type === 'date') return esc(fmtDate(v, toYMD(parseISO(store.plan.start))[0]));
+    return esc(formatValue(f, v));
   }
 
   function rowHTML(r, i, ctx) {
@@ -117,7 +135,7 @@ export function createGrid(app, root) {
     const cells = cols
       .map(
         (c) =>
-          `<div class="gc c-${c.key}${c.align === 'r' ? ' r' : ''}${act === c.key ? ' act' : ''}" data-col="${c.key}" role="gridcell" id="gc-${r.id}-${c.key}">${cellHTML(r, c, ctx)}</div>`
+          `<div class="gc c-${c.key}${c.field ? ' c-cf' : ''}${c.align === 'r' ? ' r' : c.align === 'c' ? ' c' : ''}${act === c.key ? ' act' : ''}" data-col="${c.key}" role="gridcell" id="gc-${r.id}-${c.key}">${cellHTML(r, c, ctx)}</div>`
       )
       .join('');
     return `<div class="${cls}" role="row" aria-selected="${sel}" aria-level="${r.level + 1}" data-id="${r.id}" style="top:${top}px${tint ? `;--tint:${tint}` : ''}">${cells}</div>`;
@@ -133,7 +151,7 @@ export function createGrid(app, root) {
     head.innerHTML = cols
       .map(
         (c) =>
-          `<div class="gh${c.align === 'r' ? ' r' : ''}" data-col="${c.key}" role="columnheader"${c.title ? ` title="${esc(c.title)}"` : ''}>${esc(c.label)}${c.key !== 'num' ? `<span class="rs" data-rs="${c.key}" title="Drag to resize" aria-hidden="true"></span>` : ''}</div>`
+          `<div class="gh${c.align === 'r' ? ' r' : ''}${c.field ? ' gh-cf' : ''}" data-col="${c.key}" role="columnheader"${c.fixed ? '' : ` draggable="true"`} title="${esc(c.title ? `${c.title} · ` : '')}${c.fixed ? 'Right-click for column options' : 'Drag to reorder · right-click for options'}"><span class="gh-l">${esc(c.label)}</span>${c.key !== 'num' ? `<span class="rs" data-rs="${c.key}" title="Drag to resize" aria-hidden="true"></span>` : ''}</div>`
       )
       .join('');
     const n = store.d.visible.length;
@@ -192,6 +210,11 @@ export function createGrid(app, root) {
   // ---- editing -----------------------------------------------------------
   function rawValue(r, col) {
     if (r.kind === 'section') return r.name;
+    const cf = colDef(col);
+    if (cf && cf.field) {
+      const v = r.values ? r.values[cf.field.id] : undefined;
+      return cf.field.type === 'date' || cf.field.type === 'select' ? v || '' : formatValue(cf.field, v);
+    }
     switch (col) {
       case 'preds':
         return predsText(r, store.d.tree);
@@ -219,9 +242,18 @@ export function createGrid(app, root) {
     if (!cell) return;
     let input;
     const orig = rawValue(r, col);
-    if (col === 'status' || col === 'priority') {
+    const field = colDef(col) && colDef(col).field;
+    if (field && field.type === 'checkbox') return toggleCheck(id, col);
+    if (col === 'status' || col === 'priority' || (field && field.type === 'select')) {
       input = document.createElement('select');
-      input.innerHTML = (col === 'status' ? STATUSES : PRIORITIES).map((s) => `<option${s === orig ? ' selected' : ''}>${esc(s)}</option>`).join('');
+      const list = field ? ['', ...field.options] : col === 'status' ? STATUSES : PRIORITIES;
+      input.innerHTML = list.map((s) => `<option${s === orig ? ' selected' : ''}>${esc(s)}</option>`).join('');
+    } else if (field) {
+      input = document.createElement('input');
+      input.type = field.type === 'date' ? 'date' : 'text';
+      if (field.type === 'number') input.inputMode = 'decimal';
+      if (field.type === 'url') input.placeholder = 'https://';
+      input.value = initial != null ? initial : orig;
     } else {
       input = document.createElement('input');
       input.type = col === 'start' || col === 'finish' ? 'date' : 'text';
@@ -231,7 +263,7 @@ export function createGrid(app, root) {
     input.className = 'ed';
     input.setAttribute('aria-label', `Edit ${col}`);
     input.spellcheck = false;
-    editing = { id, col, input, orig };
+    editing = { id, col, input, orig, field };
     cell.classList.add('editing');
     if (r.kind === 'section' || col === 'name') {
       const nm = cell.querySelector('.nm');
@@ -279,6 +311,10 @@ export function createGrid(app, root) {
           if (errs.length) setTimeout(() => app.toast(errs.join(' '), 'error', 7000));
           return undefined;
         }
+        if (ed.field) {
+          const f = findField(plan, ed.field.id);
+          return f ? setFieldValue(t, f, v) || undefined : false;
+        }
         if (ed.col === 'name' && !v.trim()) return 'Task name cannot be empty.';
         return setTaskField(t, ed.col, v) || undefined;
       });
@@ -287,6 +323,19 @@ export function createGrid(app, root) {
       body.focus({ preventScroll: true });
       if (dRow || dCol) move(dRow, dCol, false);
     }
+  }
+
+  function toggleCheck(id, col) {
+    const c = colDef(col);
+    if (!c || !c.field || store.readOnly) return store.readOnly ? store.emit('readonly') : undefined;
+    const r = store.d.tree.byId.get(id);
+    if (!r || r.kind === 'section') return undefined;
+    return store.commit(`Edit ${c.field.name}`, (plan) => {
+      const t = plan.rows.find((x) => x.id === id);
+      const f = findField(plan, c.field.id);
+      if (!t || !f) return false;
+      return setFieldValue(t, f, !(t.values && t.values[f.id])) || undefined;
+    });
   }
 
   // ---- selection & keyboard ---------------------------------------------
@@ -312,6 +361,22 @@ export function createGrid(app, root) {
     const k = e.key;
     const page = Math.max(1, Math.floor((scroll.clientHeight - HEAD_H) / rowH()) - 1);
     if (k !== 'Tab' && k !== 'Shift') released = false;
+    const decide = () => {
+      const c = colDef(a.col);
+      const section = r.kind === 'section';
+      return keyAction({
+        key: k, mod: mod(e), alt: e.altKey, shift: e.shiftKey, col: a.col, section,
+        editable: !store.readOnly && canEdit(r, section ? 'name' : a.col),
+        editKind: c ? c.edit || 'text' : 'text',
+      });
+    };
+    const doKey = (what) => {
+      if (what === 'edit') return startEdit(r.id, r.kind === 'section' ? 'name' : a.col);
+      if (what === 'open') return app.openCard(r.id);
+      if (what === 'toggle-check') return toggleCheck(r.id, a.col);
+      if (what === 'type') return startEdit(r.id, a.col, k);
+      return undefined;
+    };
     const handled = () => {
       e.preventDefault();
       e.stopPropagation();
@@ -346,13 +411,10 @@ export function createGrid(app, root) {
       case 'Enter':
         handled();
         if (mod(e)) return app.addTask();
-        if (!r) return undefined;
-        if (r.kind === 'section') return startEdit(r.id, 'name');
-        if (e.shiftKey || a.col === 'num' || !canEdit(r, a.col)) return app.openCard(r.id);
-        return startEdit(r.id, a.col);
+        return r ? doKey(decide()) : undefined;
       case 'F2':
         handled();
-        return r && startEdit(r.id, r.kind === 'section' ? 'name' : a.col);
+        return r ? doKey(decide()) : undefined;
       case 'Insert':
         handled();
         return e.shiftKey ? app.addSection() : app.addTask();
@@ -372,18 +434,27 @@ export function createGrid(app, root) {
         }
         return app.toast('Grid released: Tab now moves focus out of the grid.', 'info', 2000);
       case ' ':
+        if (r && decide() === 'toggle-check') {
+          handled();
+          return doKey('toggle-check');
+        }
         if (r && (r.kind === 'section' || store.d.tree.isSummary(r.id))) {
           handled();
           return app.toggleCollapse(r.id);
         }
         return undefined;
+      case 'ContextMenu':
+        if (!r) return undefined;
+        handled();
+        return openRowMenu(r.id, rowsEl.querySelector(`.gr[data-id="${r.id}"] [data-col="${a.col}"]`) || body);
       default:
-        if (r && k.length === 1 && !mod(e) && !e.altKey && r.kind !== 'section' && canEdit(r, a.col)) {
-          const c = cols.find((x) => x.key === a.col);
-          if (c && c.edit === 'text') {
-            handled();
-            return startEdit(r.id, a.col, k);
-          }
+        if (r && k === 'F10' && e.shiftKey) {
+          handled();
+          return openRowMenu(r.id, rowsEl.querySelector(`.gr[data-id="${r.id}"] [data-col="${a.col}"]`) || body);
+        }
+        if (r && decide() === 'type') {
+          handled();
+          return doKey('type');
         }
     }
     return undefined;
@@ -394,6 +465,10 @@ export function createGrid(app, root) {
   });
 
   // ---- mouse ---------------------------------------------------------------
+  // Double-click detection uses the click count of the *second* click
+  // (event.detail === 2) instead of the dblclick event: the first click selects
+  // the row, which re-renders it, so a native dblclick would target a node that
+  // is no longer in the document and never fire.
   rowsEl.addEventListener('click', (e) => {
     if (suppressClick) {
       suppressClick = false;
@@ -401,6 +476,7 @@ export function createGrid(app, root) {
     }
     const rowEl = e.target.closest('.gr');
     if (!rowEl || e.target.closest('.ed')) return;
+    if (e.target.closest('a[href]')) return;
     const id = Number(rowEl.dataset.id);
     const actEl = e.target.closest('[data-act]');
     const cell = e.target.closest('[data-col]');
@@ -408,19 +484,134 @@ export function createGrid(app, root) {
     if (act === 'toggle') return app.toggleCollapse(id);
     if (act === 'color') return app.sectionColor(id, actEl);
     if (act === 'sec-menu') return app.sectionMenu(id, actEl);
-    app.select(id, { extend: e.shiftKey, toggle: mod(e), col: cell ? cell.dataset.col : 'name', keepCard: true });
-    if (act === 'card') return app.openCard(id);
+    const r = store.d.tree.byId.get(id);
+    const col = cell ? cell.dataset.col : 'name';
+    const section = !!r && r.kind === 'section';
+    const what = clickAction({ detail: e.detail, act, editable: !store.readOnly && canEdit(r, section ? 'name' : col), section });
+    if (what === 'edit') return startEdit(id, section ? 'name' : col);
+    if (what === 'check') {
+      if (e.detail > 1) return undefined;
+      app.select(id, { col, keepCard: true });
+      return toggleCheck(id, col);
+    }
+    if (what === 'open') {
+      if (r && r.kind !== 'section') return app.openCard(id, { focus: act === 'card' });
+      return undefined;
+    }
+    if (e.detail > 1) return undefined;
+    app.select(id, { extend: e.shiftKey, toggle: mod(e), col, keepCard: true });
     body.focus({ preventScroll: true });
     return undefined;
   });
-  rowsEl.addEventListener('dblclick', (e) => {
+
+  function openRowMenu(id, at) {
+    hideTip();
+    if (!store.selection.has(id)) app.select(id, { keepCard: true });
+    app.rowMenu(id, at);
+  }
+  rowsEl.addEventListener('contextmenu', (e) => {
     const rowEl = e.target.closest('.gr');
+    if (!rowEl || e.target.closest('.ed') || isTyping(e)) return;
+    e.preventDefault();
     const cell = e.target.closest('[data-col]');
-    if (!rowEl || !cell || e.target.closest('[data-act]')) return;
     const id = Number(rowEl.dataset.id);
-    const r = store.d.tree.byId.get(id);
-    if (canEdit(r, cell.dataset.col)) startEdit(id, cell.dataset.col);
-    else if (r && r.kind !== 'section') app.openCard(id);
+    if (!store.selection.has(id)) app.select(id, { col: cell ? cell.dataset.col : 'name', keepCard: true });
+    openRowMenu(id, { x: e.clientX, y: e.clientY });
+  });
+
+  // hover preview: first lines of the description (text only, never HTML)
+  let tipTimer = 0;
+  let tipId = null;
+  function hideTip() {
+    clearTimeout(tipTimer);
+    tipId = null;
+    tipEl.hidden = true;
+  }
+  rowsEl.addEventListener('mouseover', (e) => {
+    const nameCell = e.target.closest('.gr.task .c-name');
+    const id = nameCell ? Number(nameCell.closest('.gr').dataset.id) : null;
+    if (id === tipId) return;
+    hideTip();
+    if (id == null || drag || editing) return;
+    const t = store.d.tree.byId.get(id);
+    const text = t ? descText(t) : '';
+    if (!text) return;
+    tipId = id;
+    tipTimer = setTimeout(() => {
+      const lines = text.split('\n').filter((l) => l.trim()).slice(0, 4);
+      tipEl.textContent = '';
+      const h = document.createElement('b');
+      h.textContent = t.name;
+      tipEl.appendChild(h);
+      for (const l of lines) {
+        const d = document.createElement('div');
+        d.textContent = l.length > 160 ? `${l.slice(0, 159)}…` : l;
+        tipEl.appendChild(d);
+      }
+      const rb = nameCell.getBoundingClientRect();
+      const pb = root.getBoundingClientRect();
+      tipEl.style.left = `${Math.max(4, rb.left - pb.left + 24)}px`;
+      tipEl.style.top = `${rb.bottom - pb.top + 2}px`;
+      tipEl.hidden = false;
+    }, 450);
+  });
+  rowsEl.addEventListener('mouseleave', hideTip);
+  scroll.addEventListener('scroll', hideTip, { passive: true });
+
+  // header: right-click menu, drag to reorder
+  head.addEventListener('contextmenu', (e) => {
+    const h = e.target.closest('.gh');
+    if (!h) return;
+    e.preventDefault();
+    app.columnsMenu({ x: e.clientX, y: e.clientY }, h.dataset.col);
+  });
+  let colDrag = null;
+  const clearMarks = () => head.querySelectorAll('.drop-before, .drop-after').forEach((n) => n.classList.remove('drop-before', 'drop-after'));
+  head.addEventListener('dragstart', (e) => {
+    const h = e.target.closest('.gh[draggable="true"]');
+    if (!h) return;
+    colDrag = h.dataset.col;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('application/x-planboard-col', colDrag);
+    h.classList.add('dragging');
+  });
+  const dropSpot = (e) => {
+    const h = e.target.closest('.gh');
+    if (!h || !colDrag) return null;
+    const c = colDef(h.dataset.col);
+    if (!c) return null;
+    if (c.fixed) {
+      const first = cols.find((x) => !x.fixed);
+      return first ? { el: head.querySelector(`.gh[data-col="${first.key}"]`), before: first.key, side: 'before' } : null;
+    }
+    const b = h.getBoundingClientRect();
+    const after = e.clientX > b.left + b.width / 2;
+    const i = cols.indexOf(c);
+    const next = cols.slice(i + 1).find((x) => !x.fixed);
+    return { el: h, before: after ? (next ? next.key : null) : c.key, side: after ? 'after' : 'before' };
+  };
+  head.addEventListener('dragover', (e) => {
+    const spot = dropSpot(e);
+    if (!spot) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    clearMarks();
+    if (spot.el) spot.el.classList.add(`drop-${spot.side}`);
+  });
+  head.addEventListener('drop', (e) => {
+    const spot = dropSpot(e);
+    clearMarks();
+    if (!spot) return;
+    e.preventDefault();
+    const key = colDrag;
+    colDrag = null;
+    if (spot.before === key) return;
+    store.commit('Move column', (plan) => (moveColumnTo(plan, key, spot.before) ? undefined : false), { touch: false, schedule: false });
+  });
+  head.addEventListener('dragend', () => {
+    colDrag = null;
+    clearMarks();
+    head.querySelectorAll('.dragging').forEach((n) => n.classList.remove('dragging'));
   });
 
   // drag rows by the # cell
@@ -429,6 +620,7 @@ export function createGrid(app, root) {
   rowsEl.addEventListener('pointerdown', (e) => {
     const num = e.target.closest('.c-num');
     if (!num || e.button !== 0 || store.readOnly) return;
+    hideTip();
     const id = Number(num.closest('.gr').dataset.id);
     drag = { id, x: e.clientX, y: e.clientY, started: false, target: null };
   });
@@ -519,6 +711,7 @@ export function createGrid(app, root) {
     const rs = e.target.closest('.rs');
     if (!rs) return;
     e.preventDefault();
+    e.stopPropagation();
     const key = rs.dataset.rs;
     const col = cols.find((c) => c.key === key);
     const x0 = e.clientX;

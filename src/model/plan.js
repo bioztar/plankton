@@ -3,6 +3,9 @@ import { clampDuration, clampLag, MAX_DURATION, isISODate, parseISO, toISO, toda
 import { LINK_TYPES } from '../schedule/links.js';
 import { normalizeLevels } from './tree.js';
 import { sanitizeLinks } from '../schedule/engine.js';
+import { sanitizeHtml, MAX_DESC_HTML } from '../util/sanitize.js';
+import { markdownToHtml } from '../util/markdown.js';
+import { normFields, normValues } from './fields.js';
 
 export const SCHEMA_VERSION = 1;
 export const STATUSES = ['Not started', 'In progress', 'Blocked', 'Done'];
@@ -40,6 +43,7 @@ export const DEFAULT_SETTINGS = {
   dayWidth: 0,
   labelMode: 'name',
   columns: null,
+  columnOrder: null,
   gridWidth: 0,
 };
 
@@ -68,7 +72,7 @@ export function createTask(plan, fields = {}) {
     kind: 'task',
     level: 0,
     name: '',
-    desc: '',
+    descHtml: '',
     start: toISO(s),
     finish: toISO(finishFromDuration(s, duration)),
     duration,
@@ -82,6 +86,7 @@ export function createTask(plan, fields = {}) {
     notes: '',
     preds: [],
     custom: [],
+    values: {},
     collapsed: false,
     baseline: null,
     createdAt: stamp,
@@ -117,6 +122,7 @@ export function createPlan(fields = {}) {
     statusDate: '',
     status: 'On track',
     rows: [],
+    fields: [],
     nextId: 1,
     baselineSavedAt: null,
     logs: { risks: [], decisions: [], questions: [] },
@@ -163,7 +169,7 @@ function normTask(t, plan) {
     kind: 'task',
     level: Math.max(0, Math.floor(+t.level || 0)),
     name: str(t.name, 500),
-    desc: str(t.desc),
+    descHtml: t.descHtml != null ? sanitizeHtml(str(t.descHtml, MAX_DESC_HTML * 2)) : t.desc ? markdownToHtml(str(t.desc)) : '',
     start,
     finish,
     duration,
@@ -179,6 +185,7 @@ function normTask(t, plan) {
     custom: Array.isArray(t.custom)
       ? t.custom.filter((c) => c && typeof c === 'object').map((c) => ({ key: str(c.key, 200), value: str(c.value, 2000) }))
       : [],
+    values: normValues(t.values, plan.fields || []),
     collapsed: !!t.collapsed,
     baseline,
     createdAt: str(t.createdAt, 40) || nowStamp(),
@@ -244,11 +251,15 @@ export function normalizePlan(input, report) {
     const cols = {};
     for (const [k, v] of Object.entries(s.columns)) {
       if (/^\w{1,30}$/.test(k) && v && typeof v === 'object') {
-        cols[k] = { visible: v.visible !== false, ...(v.explicit ? { explicit: true } : {}), width: Math.max(30, Math.min(800, +v.width || 0)) || undefined };
+        cols[k] = { visible: v.visible !== false, ...(v.explicit ? { explicit: true } : {}), width: +v.width > 0 ? Math.max(30, Math.min(800, +v.width)) : undefined };
       }
     }
     plan.settings.columns = cols;
   }
+  if (Array.isArray(s.columnOrder)) {
+    plan.settings.columnOrder = [...new Set(s.columnOrder.filter((k) => typeof k === 'string' && /^\w{1,30}$/.test(k)))].slice(0, 200);
+  }
+  plan.fields = normFields(input.fields);
   const seen = new Set();
   let maxId = 0;
   plan.rows = [];

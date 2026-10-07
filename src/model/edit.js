@@ -4,6 +4,7 @@ import { parseLinkList, formatLink, LINK_TYPES } from '../schedule/links.js';
 import { linkError } from '../schedule/engine.js';
 import { computeTree, leavesOf, insertionPoint, isTask, blockRange } from './tree.js';
 import { createTask, createSection, STATUSES, PRIORITIES } from './plan.js';
+import { sanitizeHtml, MAX_DESC_HTML } from '../util/sanitize.js';
 import {
   clampDuration, clampLag, parseISO, toISO, isISODate, nextWorkday, wdIndex, fromWdIndex, applyDateEdit, finishFromDuration, durationFromDates,
 } from '../schedule/calendar.js';
@@ -77,7 +78,12 @@ export function setTaskField(task, field, value, pinned) {
     case 'workstream':
       task[field] = String(value).trim().slice(0, 200);
       return null;
-    case 'desc':
+    case 'descHtml': {
+      const h = sanitizeHtml(value);
+      if (h.length > MAX_DESC_HTML) return 'Description is too long.';
+      task.descHtml = h;
+      return null;
+    }
     case 'notes':
       task[field] = String(value).slice(0, 20000);
       return null;

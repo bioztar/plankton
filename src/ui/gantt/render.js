@@ -3,6 +3,7 @@
 import { escapeHtml as esc } from '../../util/escape.js';
 import { parseISO, weekday } from '../../schedule/calendar.js';
 import { ticks } from './scale.js';
+import { descText, firstLine } from '../../util/sanitize.js';
 
 export const HEADER_H = 44;
 
@@ -229,7 +230,9 @@ export function renderGantt(o) {
     }
     const text = o.labelMode === 'owner' ? t.owner : o.labelMode === 'none' ? '' : t.name;
     if (text) parts.push(`<text class="lbl" x="${r1(b.x2 + (o.interactive ? 15 : 6))}" y="${r1(cy + 4)}">${esc(text)}</text>`);
-    bars.push(`<g class="${cls}" data-id="${t.id}">${parts.join('')}</g>`);
+    const line = o.interactive ? firstLine(descText(t)) : '';
+    const title = o.interactive ? `<title>${esc(t.name)}${line ? ` — ${esc(line)}` : ''}&#10;Click to open details · drag to move</title>` : '';
+    bars.push(`<g class="${cls}" data-id="${t.id}">${title}${parts.join('')}</g>`);
   }
   out.push(`<g class="bars">${bars.join('')}</g>`);
   if (o.header) out.push(renderHeader(range, ppd, width, { todayDay: o.todayDay }));

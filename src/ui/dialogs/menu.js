@@ -17,13 +17,27 @@ export function closeMenu(refocus = true) {
   menu.remove();
   document.removeEventListener('pointerdown', outside, true);
   anchor.setAttribute('aria-expanded', 'false');
-  if (refocus && anchor.focus && document.contains(anchor)) anchor.focus({ preventScroll: true });
+  if (refocus && anchor.focus && (!(anchor instanceof Node) || document.contains(anchor))) anchor.focus({ preventScroll: true });
 }
 
 export const isMenuOpen = () => !!current;
 
 /** items: [{ label | html, action, checked, radio, disabled, danger, hint, keepOpen } | { sep: true } | { heading }] */
-export function openMenu(anchor, items, { label = 'Menu' } = {}) {
+// A context menu opens at a point: { x, y } stands in for an anchor element.
+function pointAnchor(a) {
+  if (!a || a.getBoundingClientRect) return a;
+  const prev = document.activeElement;
+  return {
+    dataset: {},
+    contains: () => false,
+    getBoundingClientRect: () => ({ left: a.x, right: a.x, top: a.y, bottom: a.y }),
+    setAttribute() {},
+    focus: (o) => prev && prev.focus && prev.focus(o),
+  };
+}
+
+export function openMenu(anchorIn, items, { label = 'Menu' } = {}) {
+  const anchor = pointAnchor(anchorIn);
   if (anchor.dataset.justClosed) {
     delete anchor.dataset.justClosed;
     return;

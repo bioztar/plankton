@@ -1,3 +1,4 @@
+import './minidom.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createStore } from '../src/ui/state.js';

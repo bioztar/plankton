@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="color-scheme" content="light dark">
-<meta name="generator" content="planboard 1.1.0">
+<meta name="generator" content="planboard 1.2.0">
 <title>Planboard</title>
 <style>/* ---- base.css */
 :root {
@@ -102,44 +102,88 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; borde
 .bc-prog { height: 4px; background: var(--panel2); border-radius: 2px; margin-top: 6px; overflow: hidden; }
 .bc-prog span { display: block; height: 100%; background: var(--ok); }
 .bc-empty { margin: 8px; font-size: 12px; }
+.bc-desc { font-size: 12px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- card.css */
 .card {
-  position: fixed; top: 0; right: 0; bottom: 0; width: min(470px, 100vw); z-index: 40; background: var(--bg);
+  position: fixed; top: 0; right: 0; bottom: 0; width: max(50vw, min(560px, 100vw)); max-width: 100vw; z-index: 40; background: var(--bg);
   border-left: 1px solid var(--line); box-shadow: var(--shadow); display: flex; flex-direction: column;
 }
+.card.max { width: 100vw !important; left: 0; border-left: 0; }
 .card[hidden] { display: none; }
-.card-head { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.card-rs { position: absolute; left: -4px; top: 0; bottom: 0; width: 8px; cursor: ew-resize; z-index: 2; }
+.card-rs:hover, .card-rs:focus-visible { background: var(--accent); opacity: 0.35; outline: none; }
+.card.max .card-rs { display: none; }
+.card-head { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
 .card-outline { font-weight: 700; color: var(--muted); min-width: 28px; }
-.card-name { flex: 1; font-size: 15px; font-weight: 600; }
-.card-body { overflow: auto; padding: 12px 14px 20px; flex: 1; }
-.fgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
-.fld { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
-.fld input, .fld select { color: var(--fg); font-size: 13px; }
-.span2 { grid-column: span 2; }
-.chk { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.card-title { flex: 1; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.card-body { overflow: auto; padding: 12px 18px 20px; flex: 1; display: flex; flex-direction: column; }
+.card.max .card-body > * { width: 100%; max-width: 1100px; margin-left: auto; margin-right: auto; }
+.card-name { width: 100%; font-size: 22px; font-weight: 650; line-height: 1.3; resize: none; overflow: hidden; border: 1px solid transparent; background: transparent; padding: 4px 6px; margin: 0 0 6px -6px; font-family: inherit; color: var(--fg); }
+.card-name:hover:not(:disabled) { border-color: var(--line); }
+.card-name:focus { border-color: var(--accent); background: var(--bg); }
+.fstrip { display: flex; flex-wrap: wrap; gap: 6px 10px; padding: 8px 0 10px; border-bottom: 1px solid var(--line); }
+.fs { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--muted); min-width: 0; }
+.fs > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+.fs input, .fs select { color: var(--fg); font-size: 13px; width: 136px; }
+.fs.w-xs input { width: 70px; }
+.fs.w-l input { width: 200px; }
+.fs-chk { align-items: flex-start; }
+.fs-chk input { width: auto; height: 28px; }
+.fs-cf > span:first-child { color: var(--accent); }
+.fs-url { display: flex; gap: 4px; align-items: center; }
+.cd-desc { flex: 1 0 auto; display: flex; flex-direction: column; min-height: 46vh; }
+.cd-desc .rt, .cd-desc .rt-view { flex: 1; display: flex; flex-direction: column; }
+.rt { border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.rt:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+.rt-bar { display: flex; flex-wrap: wrap; gap: 2px; padding: 4px; border-bottom: 1px solid var(--line); background: var(--panel); border-radius: 8px 8px 0 0; position: sticky; top: -12px; z-index: 1; }
+.rt-b { min-width: 30px; height: 28px; border: 1px solid transparent; background: transparent; border-radius: 5px; cursor: pointer; color: var(--fg); font-size: 13px; padding: 0 6px; }
+.rt-b:hover { background: var(--hover); border-color: var(--line); }
+.rt-b[aria-pressed="true"] { background: var(--sel); border-color: var(--accent); }
+.rt-sep { width: 1px; background: var(--line); margin: 3px 4px; }
+.rt-ed { flex: 1; min-height: 240px; padding: 10px 14px; outline: none; overflow-wrap: anywhere; cursor: text; }
+.rt-ed:empty::before { content: attr(data-placeholder); color: var(--muted); pointer-events: none; }
+.rt-view { border: 1px solid var(--grid); border-radius: 8px; padding: 6px 14px; background: var(--panel); }
+.rt-view input[type=checkbox] { pointer-events: none; }
+.rt-doc { line-height: 1.5; font-size: 14px; }
+.rt-doc h1 { font-size: 1.5em; margin: 0.6em 0 0.3em; }
+.rt-doc h2 { font-size: 1.25em; margin: 0.6em 0 0.3em; }
+.rt-doc h3 { font-size: 1.08em; margin: 0.6em 0 0.3em; text-transform: none; letter-spacing: 0; color: var(--fg); }
+.rt-doc p { margin: 0.4em 0; }
+.rt-doc ul, .rt-doc ol { margin: 0.4em 0; padding-left: 1.6em; }
+.rt-doc li:has(> input[type=checkbox]:first-child) { list-style: none; margin-left: -1.3em; }
+.rt-doc blockquote { margin: 0.5em 0; padding: 2px 12px; border-left: 3px solid var(--line); color: var(--muted); }
+.rt-doc pre { background: var(--panel2); padding: 8px 10px; border-radius: 6px; overflow: auto; white-space: pre-wrap; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+.rt-doc code { background: var(--panel2); padding: 0 3px; border-radius: 3px; font-family: ui-monospace, Consolas, monospace; font-size: 0.92em; }
+.rt-doc table { border-collapse: collapse; margin: 0.5em 0; min-width: 50%; }
+.rt-doc th, .rt-doc td { border: 1px solid var(--line); padding: 4px 8px; vertical-align: top; text-align: left; min-width: 40px; }
+.rt-doc th { background: var(--panel2); }
+.rt-doc hr { border: 0; border-top: 1px solid var(--line); margin: 0.8em 0; }
+.rt-doc a { color: var(--accent); }
+.cd-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0 24px; }
 .card-sec { margin-top: 16px; }
 .card-sec h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 6px; display: flex; align-items: center; gap: 8px; }
-.md { border: 1px solid var(--grid); border-radius: 6px; padding: 4px 10px; background: var(--panel); }
-.md p { margin: 6px 0; }
-.md ul { margin: 6px 0; padding-left: 20px; }
-.md code { background: var(--panel2); padding: 0 3px; border-radius: 3px; }
+.h-note { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.card-sec textarea { width: 100%; }
 .preds { width: 100%; border-collapse: collapse; font-size: 12px; }
 .preds th { text-align: left; font-weight: 600; color: var(--muted); padding: 2px 4px; }
 .preds td { padding: 2px 4px; vertical-align: middle; }
-.preds td:first-child { display: flex; align-items: center; gap: 6px; max-width: 250px; }
+.preds td:first-child { display: flex; align-items: center; gap: 6px; max-width: 320px; }
 .pr-ref { width: 56px; }
-.pr-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pr-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
 .pr-lag { width: 60px; }
 .pr-add-row { display: flex; gap: 6px; margin-top: 6px; }
 .pr-add-row input { flex: 1; }
-.succ { font-size: 12px; color: var(--muted); }
-.chip-link { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 0 8px; cursor: pointer; font-size: 12px; margin: 2px 0; }
-.cf { display: flex; gap: 6px; margin-bottom: 6px; }
-.cf-k { width: 36%; }
+.succ { font-size: 12px; color: var(--muted); margin: 0; }
+.chip-link { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 0 8px; cursor: pointer; font-size: 12px; margin: 2px 0; color: var(--fg); }
+.cf { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+.cf-k { width: 30%; }
 .cf-v { flex: 1; }
 .card-foot { margin-top: 20px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .stamp { font-size: 11px; color: var(--muted); }
+.chk { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+@media (max-width: 720px) { .card { width: 100vw !important; } }
+.rt-view[hidden], .rt[hidden] { display: none; }
 
 /* ---- dialogs.css */
 dialog.modal { border: 1px solid var(--line); border-radius: 12px; padding: 0; background: var(--bg); color: var(--fg); width: min(480px, 94vw); max-height: 92vh; box-shadow: var(--shadow); }
@@ -184,6 +228,15 @@ dialog::backdrop { background: rgba(10, 15, 25, 0.45); }
 .kbd-table td:first-child { white-space: nowrap; width: 42%; }
 .help-h { font-size: 14px; margin: 16px 0 6px; }
 .help-share { margin: 0 0 8px; padding-left: 20px; font-size: 13px; line-height: 1.5; }
+.mc-list { list-style: none; margin: 0 0 10px; padding: 0; border: 1px solid var(--line); border-radius: 8px; max-height: 55vh; overflow: auto; }
+.mc-row { display: flex; align-items: center; gap: 10px; padding: 4px 10px; border-bottom: 1px solid var(--grid); }
+.mc-row:last-child { border-bottom: 0; }
+.mc-row.off .mc-name { color: var(--muted); }
+.mc-row .chk { min-width: 180px; }
+.mc-type { font-size: 12px; flex: 1; }
+.mc-acts { display: flex; gap: 4px; }
+.cf-err:empty { display: none; }
+.m-body .fld textarea { width: 100%; }
 
 /* ---- gantt.css */
 .gt-scroll { height: 100%; overflow: auto; position: relative; background: var(--bg); }
@@ -259,6 +312,26 @@ dialog::backdrop { background: rgba(10, 15, 25, 0.45); }
 .drop-line::before { content: ""; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 .gr.drop-in { box-shadow: inset 0 0 0 2px var(--accent); }
 .dragging .g-rows { cursor: grabbing; }
+.c-name { position: relative; }
+.open-btn { margin-left: auto; flex: none; border: 1px solid var(--line); background: var(--bg); color: var(--accent); border-radius: 5px; font-size: 12px; line-height: 1; padding: 3px 6px; cursor: pointer; opacity: 0; }
+.gr:hover .open-btn, .gr.sel .open-btn, .open-btn:focus-visible { opacity: 1; }
+.open-btn:hover { background: var(--accent); color: var(--accent-fg); }
+.has-desc { color: var(--muted); font-size: 11px; margin-left: 4px; flex: none; }
+.g-tip { position: absolute; z-index: 30; max-width: 420px; background: var(--bg); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.45; pointer-events: none; white-space: normal; }
+.g-tip b { display: block; margin-bottom: 2px; }
+.g-tip div { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.cf-chk { cursor: pointer; font-size: 15px; width: 100%; text-align: center; user-select: none; }
+.c-cf.c { justify-content: center; }
+.cf-url { color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gh[draggable="true"] { cursor: grab; }
+.gh.dragging { opacity: 0.4; }
+.gh.drop-before { box-shadow: inset 3px 0 0 var(--accent); }
+.gh.drop-after { box-shadow: inset -3px 0 0 var(--accent); }
+.gh-cf .gh-l { font-style: italic; }
+.gh-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hint-bar { display: flex; align-items: center; gap: 10px; padding: 6px 12px; background: var(--sel); border-bottom: 1px solid var(--line); font-size: 13px; }
+.hint-bar[hidden] { display: none; }
+.hint-bar .hint-text { flex: 1; }
 
 /* ---- layout.css */
 #app { height: 100vh; display: flex; flex-direction: column; }
@@ -326,6 +399,7 @@ body.drop-on::after {
   .stats { margin-left: 0; }
   .filters { margin-left: 0; }
 }
+.tb-group[hidden] { display: none; }
 
 /* ---- logs.css */
 .logs { padding: 14px 16px 40px; max-width: 1300px; }
@@ -1463,11 +1537,915 @@ function criticalPath(rows, tree = computeTree(rows)) {
 return { criticalPath };
 })();
 
+// ---- util/escape.js
+const __util_escape = (() => {
+
+const MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => MAP[c]);
+}
+
+/** JSON safe to place inside a <script> element. */
+function jsonForScript(value) {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+return { escapeHtml, jsonForScript };
+})();
+
+// ---- util/markdown.js
+const __util_markdown = (() => {
+const { escapeHtml } = __util_escape;
+// Tiny markdown subset: **bold**, *italic* / _italic_, `code`, [links](https://…),
+// bare URLs, "- " / "* " bullet lists, paragraphs and line breaks.
+// Input is escaped first, so raw HTML can never get through; only http(s) and
+// mailto links become <a> elements.
+
+
+const SAFE_URL = /^(https?:\/\/|mailto:)[^\s"'<>`]+$/i;
+
+function safeUrl(url) {
+  const u = String(url || '').trim();
+  return SAFE_URL.test(u) ? u : null;
+}
+
+function unescapeEntities(s) {
+  return s
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+function link(text, rawUrl) {
+  const url = safeUrl(unescapeEntities(rawUrl));
+  if (!url) return text;
+  return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+}
+
+function inline(escaped) {
+  const codes = [];
+  let s = escaped.replace(/`([^`]+)`/g, (_, c) => {
+    codes.push(`<code>${c}</code>`);
+    return `\u0000${codes.length - 1}\u0000`;
+  });
+  const links = [];
+  const stash = (html) => {
+    links.push(html);
+    return `\u0001${links.length - 1}\u0001`;
+  };
+  s = s.replace(/\[([^\]]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g, (_, t, u) => stash(link(t, u)));
+  s = s.replace(/(^|[\s(])((?:https?:\/\/|mailto:)[^\s<]+[^\s<.,;:!?)])/gi, (_, pre, u) => pre + stash(link(u, u)));
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  s = s.replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\w)/g, '$1<em>$2</em>');
+  s = s.replace(/(^|[^_\w])_([^_\s][^_]*?)_(?!\w)/g, '$1<em>$2</em>');
+  s = s.replace(/\u0001(\d+)\u0001/g, (_, i) => links[+i]);
+  s = s.replace(/\u0000(\d+)\u0000/g, (_, i) => codes[+i]);
+  return s;
+}
+
+/** Render the markdown subset to safe HTML. */
+function renderMarkdown(src) {
+  // Control characters are dropped up front: they are never meaningful in a
+  // description and \u0000 / \u0001 are used as placeholders below.
+  const text = String(src == null ? '' : src).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const out = [];
+  let para = [];
+  let list = null;
+  const flushPara = () => {
+    if (para.length) out.push(`<p>${para.map((l) => inline(escapeHtml(l))).join('<br>')}</p>`);
+    para = [];
+  };
+  const flushList = () => {
+    if (list) out.push(`<ul>${list.map((l) => `<li>${inline(escapeHtml(l))}</li>`).join('')}</ul>`);
+    list = null;
+  };
+  for (const line of lines) {
+    const m = /^\s*[-*•]\s+(.*)$/.exec(line);
+    if (m) {
+      flushPara();
+      (list = list || []).push(m[1]);
+    } else if (!line.trim()) {
+      flushPara();
+      flushList();
+    } else {
+      flushList();
+      para.push(line);
+    }
+  }
+  flushPara();
+  flushList();
+  return out.join('');
+}
+
+const CANON_LINK = / target="_blank" rel="noopener noreferrer"/g;
+const inlineMd = (s) => inline(escapeHtml(s)).replace(/~~([^~]+)~~/g, '<s>$1</s>').replace(CANON_LINK, ' rel="noopener noreferrer" target="_blank"');
+const LIST_RE = /^(\s*)([-*+•]|\d{1,3}[.)])\s+(.*)$/;
+const TABLE_SEP = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/;
+const cellsOf = (line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+
+/**
+ * Markdown to description HTML (headings, lists incl. nested and checklists,
+ * quotes, code, tables, rules, inline formatting). Output uses only the
+ * description allow-list and is already in sanitizeHtml's canonical form.
+ */
+function markdownToHtml(src) {
+  const text = String(src == null ? '' : src).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const out = [];
+  let para = [];
+  const flushPara = () => {
+    if (para.length) out.push(`<p>${para.map(inlineMd).join('<br>')}</p>`);
+    para = [];
+  };
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (/^\s*```/.test(line)) {
+      flushPara();
+      const code = [];
+      i++;
+      while (i < lines.length && !/^\s*```/.test(lines[i])) code.push(lines[i++]);
+      i++;
+      out.push(`<pre>${escapeHtml(code.join('\n')) || '<br>'}</pre>`);
+      continue;
+    }
+    const h = /^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/.exec(line);
+    if (h) {
+      flushPara();
+      const lvl = Math.min(3, h[1].length);
+      out.push(`<h${lvl}>${inlineMd(h[2])}</h${lvl}>`);
+      i++;
+      continue;
+    }
+    if (/^\s{0,3}([-*_])(\s*\1){2,}\s*$/.test(line)) {
+      flushPara();
+      out.push('<hr>');
+      i++;
+      continue;
+    }
+    if (/^\s{0,3}>/.test(line)) {
+      flushPara();
+      const q = [];
+      while (i < lines.length && /^\s{0,3}>/.test(lines[i])) q.push(lines[i++].replace(/^\s{0,3}>\s?/, ''));
+      out.push(`<blockquote>${markdownToHtml(q.join('\n'))}</blockquote>`);
+      continue;
+    }
+    if (line.includes('|') && i + 1 < lines.length && TABLE_SEP.test(lines[i + 1]) && lines[i + 1].includes('-')) {
+      flushPara();
+      const head = cellsOf(line);
+      i += 2;
+      const body = [];
+      while (i < lines.length && lines[i].includes('|') && lines[i].trim()) body.push(cellsOf(lines[i++]));
+      const row = (cells, t) => `<tr>${cells.map((c) => `<${t}>${inlineMd(c)}</${t}>`).join('')}</tr>`;
+      out.push(`<table><thead>${row(head, 'th')}</thead>${body.length ? `<tbody>${body.map((r) => row(r, 'td')).join('')}</tbody>` : ''}</table>`);
+      continue;
+    }
+    if (LIST_RE.test(line)) {
+      flushPara();
+      const items = [];
+      while (i < lines.length && (LIST_RE.test(lines[i]) || (items.length && /^\s{2,}\S/.test(lines[i]) && !LIST_RE.test(lines[i])))) {
+        const m = LIST_RE.exec(lines[i]);
+        if (m) items.push({ indent: m[1].replace(/\t/g, '    ').length, ordered: /\d/.test(m[2]), text: m[3] });
+        else items[items.length - 1].text += `\n${lines[i].trim()}`;
+        i++;
+      }
+      out.push(listHtml(items));
+      continue;
+    }
+    if (!line.trim()) flushPara();
+    else para.push(line);
+    i++;
+  }
+  flushPara();
+  return out.join('');
+}
+
+function listHtml(items) {
+  let out = '';
+  const stack = [];
+  for (const it of items) {
+    while (stack.length && it.indent < stack[stack.length - 1].indent) out += `</li></${stack.pop().tag}>`;
+    const top = stack[stack.length - 1];
+    if (!top || it.indent > top.indent) {
+      const tag = it.ordered ? 'ol' : 'ul';
+      stack.push({ indent: it.indent, tag });
+      out += `<${tag}><li>`;
+    } else out += '</li><li>';
+    const ck = /^\[([ xX])\]\s+(.*)$/s.exec(it.text);
+    const body = (ck ? ck[2] : it.text).split('\n').map(inlineMd).join('<br>');
+    out += ck ? `<input type="checkbox"${ck[1] === ' ' ? '' : ' checked'}> ${body}` : body;
+  }
+  while (stack.length) out += `</li></${stack.pop().tag}>`;
+  return out;
+}
+
+/** Does pasted plain text look like Markdown (rather than ordinary prose)? */
+function looksLikeMarkdown(text) {
+  const s = String(text || '');
+  return (
+    /^\s{0,3}#{1,6}\s+\S/m.test(s) ||
+    /^\s*([-*+]|\d{1,3}[.)])\s+\S/m.test(s) ||
+    /^\s{0,3}>\s?\S/m.test(s) ||
+    /^\s*```/m.test(s) ||
+    /\*\*[^*\n]+\*\*/.test(s) ||
+    /\[[^\]\n]+\]\((https?:|mailto:)[^)\s]+\)/.test(s) ||
+    (/^\s*\|.*\|\s*$/m.test(s) && TABLE_SEP.test(s.split('\n').find((l, k, a) => k > 0 && TABLE_SEP.test(l)) || ''))
+  );
+}
+
+/** Plain text to paragraphs (blank line) and line breaks, escaped. */
+function textToHtml(text) {
+  return String(text == null ? '' : text)
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .replace(/\r\n?/g, '\n')
+    .split(/\n\s*\n/)
+    .map((p) => p.replace(/^\n+|\n+$/g, ''))
+    .filter((p) => p.trim())
+    .map((p) => `<p>${p.split('\n').map((l) => escapeHtml(l)).join('<br>')}</p>`)
+    .join('');
+}
+return { safeUrl, renderMarkdown, markdownToHtml, looksLikeMarkdown, textToHtml };
+})();
+
+// ---- util/sanitize.js
+const __util_sanitize = (() => {
+const { escapeHtml } = __util_escape;
+const { safeUrl } = __util_markdown;
+// Strict allow-list HTML sanitizer for task descriptions (pasted Word / Outlook /
+// OneNote / web content and stored HTML). Input is parsed with DOMParser (inert:
+// no scripts run, nothing loads) and the output is rebuilt from scratch: only the
+// allow-listed tags and attributes are written, all text is escaped, so nothing
+// from the input can reach the output except through this code.
+
+
+
+const ALLOWED_TAGS = [
+  'h1', 'h2', 'h3', 'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'ul', 'ol', 'li', 'blockquote', 'pre', 'code',
+  'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr', 'input',
+];
+const MAX_DESC_HTML = 200000;
+const MAX_DEPTH = 120;
+
+// Dropped together with everything inside them.
+const DROP = new Set([
+  'script', 'style', 'noscript', 'template', 'iframe', 'frame', 'frameset', 'object', 'embed', 'applet', 'svg', 'math',
+  'head', 'title', 'meta', 'link', 'base', 'textarea', 'select', 'option', 'optgroup', 'button', 'img', 'image', 'picture',
+  'video', 'audio', 'source', 'track', 'canvas', 'map', 'area', 'form', 'xml', 'noembed', 'noframes', 'param', 'dialog',
+  'portal', 'datalist', 'output', 'progress', 'meter', 'colgroup', 'col', 'caption', 'xmp', 'plaintext', 'listing',
+]);
+const VOID = new Set(['br', 'hr', 'input']);
+const RENAME = { b: 'strong', i: 'em', strike: 's', del: 's', ins: 'u', h4: 'h3', h5: 'h3', h6: 'h3', tt: 'code', kbd: 'code', samp: 'code', tfoot: 'tbody', dir: 'ul', menu: 'ul' };
+const BLOCKS = new Set(['h1', 'h2', 'h3', 'p', 'ul', 'ol', 'li', 'blockquote', 'pre', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr']);
+// Generic containers: become a paragraph (inline content) or are unwrapped (block content).
+const CONTAINERS = new Set(['div', 'section', 'article', 'header', 'footer', 'main', 'aside', 'nav', 'address', 'figure', 'figcaption', 'center', 'dd', 'dt', 'dl', 'details', 'summary', 'fieldset', 'legend', 'body', 'html']);
+const PHRASING_PARENTS = new Set(['p', 'h1', 'h2', 'h3', 'pre', 'strong', 'em', 'u', 's', 'code', 'a']);
+const CELL_LIKE = new Set(['li', 'td', 'th']);
+const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
+
+const nameOf = (n) => String(n.localName || n.nodeName || '').toLowerCase();
+const attr = (n, a) => (n.getAttribute ? n.getAttribute(a) : null);
+const styleOf = (n) => String(attr(n, 'style') || '').toLowerCase();
+const classOf = (n) => String(attr(n, 'class') || '').toLowerCase();
+
+function parse(html) {
+  const P = globalThis.DOMParser;
+  if (!P) return null;
+  return new P().parseFromString(`<!DOCTYPE html><html><body>${html}</body></html>`, 'text/html');
+}
+
+/** Word / Outlook list paragraph: <p style="mso-list:l0 level2 lfo1">. */
+function wordListInfo(n) {
+  if (n.nodeType !== 1 || nameOf(n) !== 'p') return null;
+  const m = /mso-list:\s*(l\d+)\s+level(\d+)/.exec(styleOf(n));
+  if (!m) return null;
+  let marker = '';
+  const walk = (x) => {
+    for (const c of x.childNodes || []) {
+      if (c.nodeType === 1 && /mso-list:\s*ignore/.test(styleOf(c))) marker += c.textContent || '';
+      else if (c.nodeType === 1) walk(c);
+    }
+  };
+  walk(n);
+  marker = marker.replace(/[\s\u00a0]+/g, '');
+  const ordered = /^(\(?[0-9]+|\(?[a-z]{1,4})[.)]$/i.test(marker);
+  return { list: m[1], level: Math.max(1, Math.min(9, +m[2])), ordered };
+}
+
+function inlineWraps(n, tag) {
+  const st = styleOf(n);
+  if (!st) return [];
+  const w = [];
+  if (/font-weight:\s*(bold|[6-9]00)/.test(st) && tag !== 'strong') w.push('strong');
+  if (/font-style:\s*italic/.test(st) && tag !== 'em') w.push('em');
+  if (/text-decoration[^;]*underline/.test(st) && tag !== 'u') w.push('u');
+  if (/text-decoration[^;]*line-through/.test(st) && tag !== 's') w.push('s');
+  return w;
+}
+
+function hasBlockChild(n) {
+  for (const c of n.childNodes || []) {
+    if (c.nodeType !== 1) continue;
+    const t = RENAME[nameOf(c)] || nameOf(c);
+    if (BLOCKS.has(t) || CONTAINERS.has(t) || wordListInfo(c)) return true;
+  }
+  return false;
+}
+
+function isBlank(n) {
+  return n.nodeType === 3 ? !/[^\s]/.test(n.nodeValue || '') : n.nodeType === 8;
+}
+
+function textOut(s, ctx) {
+  let t = String(s || '').replace(CONTROL, '');
+  if (!ctx.pre) t = t.replace(/[\r\n\t ]+/g, ' ');
+  return escapeHtml(t);
+}
+
+function isInline(c) {
+  if (c.nodeType === 3) return true;
+  if (c.nodeType !== 1) return false;
+  const t = RENAME[nameOf(c)] || nameOf(c);
+  if (BLOCKS.has(t) || CONTAINERS.has(t) || wordListInfo(c)) return false;
+  if (t === 'p' && /msotitle|msosubtitle/.test(classOf(c))) return false;
+  return !hasBlockChild(c);
+}
+
+function children(n, ctx) {
+  const kids = Array.from(n.childNodes || []);
+  const block = !ctx.phrasing && !ctx.cell;
+  let out = '';
+  let run = '';
+  const flush = () => {
+    if (run.replace(/<br>/g, '').trim()) out += `<p>${run.trim()}</p>`;
+    run = '';
+  };
+  for (let i = 0; i < kids.length; i++) {
+    const info = wordListInfo(kids[i]);
+    if (info) {
+      flush();
+      const group = [];
+      while (i < kids.length) {
+        const inf = wordListInfo(kids[i]);
+        if (inf) group.push({ n: kids[i], ...inf });
+        else if (!isBlank(kids[i])) break;
+        i++;
+      }
+      i--;
+      out += wordList(group, ctx);
+      continue;
+    }
+    if (block && isInline(kids[i])) run += node(kids[i], { ...ctx, phrasing: true }, i === kids.length - 1);
+    else {
+      if (block) flush();
+      out += node(kids[i], ctx, i === kids.length - 1);
+    }
+  }
+  if (block) flush();
+  return out;
+}
+
+function wordList(items, ctx) {
+  let out = '';
+  const stack = [];
+  const close = () => {
+    const s = stack.pop();
+    out += `</li></${s.tag}>`;
+  };
+  for (const it of items) {
+    while (stack.length && (stack.length > it.level || (stack.length === it.level && stack[stack.length - 1].list !== it.list && it.level === 1))) close();
+    if (stack.length === it.level) out += '</li><li>';
+    while (stack.length < it.level) {
+      const tag = it.ordered ? 'ol' : 'ul';
+      stack.push({ tag, list: it.list });
+      out += `<${tag}><li>`;
+    }
+    out += children(it.n, { ...ctx, depth: ctx.depth + 1, phrasing: true, skipIgnore: true });
+  }
+  while (stack.length) close();
+  return out;
+}
+
+function node(n, ctx, last) {
+  if (n.nodeType === 3) return textOut(n.nodeValue, ctx);
+  if (n.nodeType !== 1) return '';
+  if (ctx.depth > MAX_DEPTH) return node2p(textOut(n.textContent, ctx), ctx);
+  let tag = nameOf(n);
+  if (tag.includes(':')) return tag === 'o:p' ? children(n, ctx) : '';
+  if (DROP.has(tag)) return '';
+  if (ctx.skipIgnore && /mso-list:\s*ignore/.test(styleOf(n))) return '';
+  if (/display:\s*none/.test(styleOf(n))) return '';
+  const sub = (extra = {}) => children(n, { ...ctx, depth: ctx.depth + 1, ...extra });
+  // Google Docs wraps everything in <b style="font-weight:normal">.
+  if (tag === 'b' && /font-weight:\s*(normal|[1-4]00)/.test(styleOf(n))) return sub();
+  if (tag === 'p' && /msotitle/.test(classOf(n))) tag = 'h1';
+  else if (tag === 'p' && /msosubtitle/.test(classOf(n))) tag = 'h2';
+  tag = RENAME[tag] || tag;
+
+  if (tag === 'input') {
+    if (String(attr(n, 'type') || '').toLowerCase() !== 'checkbox') return '';
+    return `<input type="checkbox"${n.hasAttribute && n.hasAttribute('checked') ? ' checked' : ''}>`;
+  }
+  if (tag === 'br') return '<br>';
+  if (tag === 'hr') return ctx.phrasing ? '<br>' : '<hr>';
+
+  if (CONTAINERS.has(tag) || (tag === 'p' && (ctx.phrasing || ctx.cell)) || /^h[123]$/.test(tag) && ctx.phrasing) {
+    if (tag !== 'p' && !/^h/.test(tag) && hasBlockChild(n) && !ctx.phrasing) return sub();
+    if (ctx.phrasing || ctx.cell) {
+      const inner = sub({ phrasing: true });
+      return inner + (last || !inner.trim() ? '' : '<br>');
+    }
+    const inner = sub({ phrasing: true });
+    return inner.trim() ? `<p>${inner}</p>` : '';
+  }
+
+  if (tag === 'a') {
+    const href = safeUrl(attr(n, 'href'));
+    const inner = sub({ inLink: true });
+    if (!href || ctx.inLink) return inner;
+    return `<a href="${escapeHtml(href)}" rel="noopener noreferrer" target="_blank">${inner}</a>`;
+  }
+
+  if (['strong', 'em', 'u', 's', 'code'].includes(tag) || !ALLOWED_TAGS.includes(tag)) {
+    const known = ALLOWED_TAGS.includes(tag);
+    const wraps = inlineWraps(n, known ? tag : '');
+    if (tag === 'code' && ctx.pre) return sub();
+    let inner = sub();
+    if (!inner) return '';
+    for (const w of wraps.reverse()) inner = `<${w}>${inner}</${w}>`;
+    return known ? `<${tag}>${inner}</${tag}>` : inner;
+  }
+
+  // structural tags
+  if (tag === 'li') {
+    if (!ctx.list) return node2p(sub({ phrasing: true }), ctx);
+    return `<li>${sub({ cell: true, list: false, phrasing: false })}</li>`;
+  }
+  if (tag === 'ul' || tag === 'ol') {
+    if (ctx.phrasing) return sub();
+    const inner = Array.from(n.childNodes || [])
+      .map((c) => (c.nodeType === 1 && nameOf(c) !== 'li' && nameOf(c) !== 'ul' && nameOf(c) !== 'ol' ? (isBlank(c) ? '' : `<li>${node(c, { ...ctx, depth: ctx.depth + 1, cell: true, list: false }, true)}</li>`) : c.nodeType === 1 ? node(c, { ...ctx, depth: ctx.depth + 1, list: true, cell: false }, true) : isBlank(c) ? '' : `<li>${textOut(c.nodeValue, ctx)}</li>`))
+      .join('');
+    return inner ? `<${tag}>${inner}</${tag}>` : '';
+  }
+  if (tag === 'table') {
+    if (ctx.phrasing || ctx.table) return sub({ phrasing: true });
+    const inner = tableRows(n, ctx);
+    return inner ? `<table>${inner}</table>` : '';
+  }
+  if (tag === 'thead' || tag === 'tbody' || tag === 'tr' || tag === 'td' || tag === 'th') {
+    // only reached outside a table: keep the content
+    return node2p(sub({ phrasing: true }), ctx);
+  }
+  if (tag === 'pre') {
+    if (ctx.phrasing) return sub({ pre: true });
+    const inner = sub({ pre: true, phrasing: true });
+    return inner ? `<pre>${inner}</pre>` : '';
+  }
+  // p, h1-h3, blockquote
+  if (tag === 'blockquote') {
+    if (ctx.phrasing) return sub();
+    const inner = hasBlockChild(n) ? sub({ cell: false }) : sub({ phrasing: true });
+    return inner.trim() ? `<blockquote>${inner}</blockquote>` : '';
+  }
+  const inner = sub({ phrasing: true });
+  if (!inner.trim()) return tag === 'p' && /\u00a0/.test(n.textContent || '') ? '<p><br></p>' : '';
+  return `<${tag}>${inner}</${tag}>`;
+}
+
+function node2p(inner, ctx) {
+  if (!inner.trim()) return '';
+  return ctx.phrasing || ctx.cell ? inner : `<p>${inner}</p>`;
+}
+
+function tableRows(table, ctx) {
+  const c = { ...ctx, depth: ctx.depth + 1, table: true };
+  const groups = [];
+  let loose = [];
+  const flush = () => {
+    if (loose.length) groups.push({ tag: 'tbody', rows: loose });
+    loose = [];
+  };
+  const rowOf = (tr) => {
+    const cells = Array.from(tr.childNodes || [])
+      .filter((x) => x.nodeType === 1 && ['td', 'th'].includes(nameOf(x)))
+      .map((td) => {
+        const t = nameOf(td);
+        let a = '';
+        for (const k of ['colspan', 'rowspan']) {
+          const v = parseInt(attr(td, k), 10);
+          if (v > 1 && v <= 100) a += ` ${k}="${v}"`;
+        }
+        return `<${t}${a}>${children(td, { ...c, cell: true, phrasing: false, list: false })}</${t}>`;
+      })
+      .join('');
+    return cells ? `<tr>${cells}</tr>` : '';
+  };
+  for (const x of Array.from(table.childNodes || [])) {
+    if (x.nodeType !== 1) continue;
+    const t = RENAME[nameOf(x)] || nameOf(x);
+    if (t === 'tr') loose.push(rowOf(x));
+    else if (t === 'thead' || t === 'tbody') {
+      flush();
+      groups.push({ tag: t, rows: Array.from(x.childNodes || []).filter((r) => r.nodeType === 1 && nameOf(r) === 'tr').map(rowOf) });
+    }
+  }
+  flush();
+  return groups
+    .map((g) => ({ ...g, rows: g.rows.filter(Boolean) }))
+    .filter((g) => g.rows.length)
+    .map((g) => `<${g.tag}>${g.rows.join('')}</${g.tag}>`)
+    .join('');
+}
+
+const EMPTY_INLINE = /<(strong|em|u|s|code|a)\b[^>]*>(\s*)<\/\1>/g;
+const TRAILING_BR = /(?<!<(p|li|td|th|h[123])>)(?:<br>)+<\/(p|li|td|th|h[123]|pre)>/g;
+
+function tidy(html) {
+  let s = html;
+  for (let k = 0; k < 4 && EMPTY_INLINE.test(s); k++) s = s.replace(EMPTY_INLINE, '$2');
+  return s.replace(TRAILING_BR, '</$2>').replace(/<p>\s*<\/p>/g, '').trim();
+}
+
+/** Sanitize untrusted HTML to the description allow-list. Returns an HTML string. */
+function sanitizeHtml(input) {
+  const src = String(input == null ? '' : input);
+  if (!src.trim()) return '';
+  const doc = parse(src.slice(0, MAX_DESC_HTML * 4));
+  if (!doc || !doc.body) return src.trim() ? `<p>${escapeHtml(src.replace(CONTROL, ''))}</p>` : '';
+  let out = tidy(children(doc.body, { depth: 0 }));
+  if (out.length > MAX_DESC_HTML) out = sanitizeHtml(out.slice(0, MAX_DESC_HTML));
+  return out;
+}
+
+const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", nbsp: ' ' };
+const decodeEnt = (t) => t.replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (_, e) => ENT[e]).replace(/\u00a0/g, ' ');
+
+/**
+ * Plain text from sanitized description HTML (CSV export, search, previews).
+ * Pure string processing: relies on the known, flat shape of sanitizeHtml output.
+ */
+function htmlToText(html) {
+  const src = String(html || '');
+  if (!src) return '';
+  const lines = [];
+  let cur = '';
+  let depth = 0;
+  let cells = 0;
+  const flush = () => {
+    const l = cur.replace(/\s+$/, '');
+    if (l.replace(/^\s*-\s*$/, '').trim()) lines.push(l);
+    cur = '';
+  };
+  for (const tok of src.match(/<[^>]*>|[^<]+/g) || []) {
+    if (tok[0] !== '<') {
+      const parts = decodeEnt(tok).split('\n');
+      parts.forEach((x, k) => {
+        if (k) flush();
+        cur += x;
+      });
+      continue;
+    }
+    const m = /^<(\/?)([a-z0-9]+)/.exec(tok);
+    if (!m) continue;
+    const [, close, t] = m;
+    if (t === 'ul' || t === 'ol') {
+      flush();
+      depth += close ? -1 : 1;
+    } else if (t === 'li') {
+      flush();
+      if (!close) cur = `${'  '.repeat(Math.max(0, depth - 1))}- `;
+    } else if (t === 'td' || t === 'th') {
+      if (!close && cells++) cur += ' | ';
+    } else if (t === 'tr') {
+      flush();
+      cells = 0;
+    } else if (t === 'br' || (close && /^(p|h[123]|pre|blockquote)$/.test(t))) flush();
+    else if (t === 'hr') {
+      flush();
+      lines.push('---');
+    } else if (t === 'input') cur += tok.includes('checked') ? '[x]' : '[ ]';
+  }
+  flush();
+  return lines.join('\n').replace(/\] {2,}/g, '] ');
+}
+
+const textCache = new Map();
+
+/** Cached plain text of a task's description. */
+function descText(task) {
+  const h = (task && task.descHtml) || '';
+  if (!h) return '';
+  let t = textCache.get(h);
+  if (t == null) {
+    if (textCache.size > 5000) textCache.clear();
+    t = htmlToText(h);
+    textCache.set(h, t);
+  }
+  return t;
+}
+
+/** First non-empty line of a description, trimmed to `max` characters. */
+function firstLine(text, max = 140) {
+  const l = String(text || '').split('\n').map((x) => x.replace(/^[-\s]*(\[[ x]\]\s*)?/, '').trim()).find(Boolean) || '';
+  return l.length > max ? `${l.slice(0, max - 1)}…` : l;
+}
+return { ALLOWED_TAGS, MAX_DESC_HTML, sanitizeHtml, htmlToText, descText, firstLine };
+})();
+
+// ---- model/fields.js
+const __model_fields = (() => {
+const { isISODate } = __schedule_calendar;
+const { safeUrl } = __util_markdown;
+// Plan-level custom column definitions (plan.fields) and per-task values
+// (task.values, keyed by field id). Pure.
+
+
+
+const FIELD_TYPES = [
+  { type: 'text', label: 'Text' },
+  { type: 'number', label: 'Number' },
+  { type: 'date', label: 'Date' },
+  { type: 'select', label: 'Single select' },
+  { type: 'checkbox', label: 'Checkbox' },
+  { type: 'person', label: 'Person' },
+  { type: 'url', label: 'URL' },
+];
+const TYPES = FIELD_TYPES.map((t) => t.type);
+const MAX_FIELDS = 50;
+const MAX_OPTIONS = 100;
+const ID_RE = /^f\d{1,6}$/;
+
+const fieldKey = (f) => `cf_${f.id}`;
+function fieldIdOfKey(key) {
+  const m = /^cf_(f\d{1,6})$/.exec(String(key));
+  return m ? m[1] : null;
+}
+// Built-in column / CSV header names a custom column may not reuse.
+const RESERVED_NAMES = ['#', 'ID', 'Outline', 'Outline level', 'Section', 'Name', 'Task name', 'Start', 'Finish', 'Duration', 'Dur.', 'Progress', 'Progress %', '%', 'Status', 'Priority', 'Owner', 'Workstream', 'Tags', 'Milestone', 'Predecessors', 'Baseline start', 'Baseline finish', 'Variance', 'Notes', 'Description'];
+const same = (a, b) => String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+const findField = (plan, id) => (plan.fields || []).find((f) => f.id === id) || null;
+const fieldByName = (plan, name) => (plan.fields || []).find((f) => same(f.name, name)) || null;
+
+function normOptions(list) {
+  const out = [];
+  for (const o of Array.isArray(list) ? list : []) {
+    const s = String(o == null ? '' : o).trim().slice(0, 100);
+    if (s && !out.some((x) => same(x, s))) out.push(s);
+    if (out.length >= MAX_OPTIONS) break;
+  }
+  return out;
+}
+
+/** Validate field definitions from untrusted JSON. */
+function normFields(list) {
+  const out = [];
+  for (const f of Array.isArray(list) ? list : []) {
+    if (!f || typeof f !== 'object' || !ID_RE.test(f.id) || out.some((x) => x.id === f.id)) continue;
+    const name = String(f.name == null ? '' : f.name).trim().slice(0, 60);
+    if (!name || out.some((x) => same(x.name, name))) continue;
+    const type = TYPES.includes(f.type) ? f.type : 'text';
+    out.push({ id: f.id, name, type, options: type === 'select' ? normOptions(f.options) : [] });
+    if (out.length >= MAX_FIELDS) break;
+  }
+  return out;
+}
+
+const TRUE = /^(true|yes|y|x|1|✓|✔|done|checked|on)$/i;
+const FALSE = /^(false|no|n|0|off|unchecked|)$/i;
+
+/** Coerce raw input to a field's type. Returns { value } (null = empty) or { error }. */
+function coerceValue(field, raw) {
+  if (field.type === 'checkbox') {
+    if (typeof raw === 'boolean') return { value: raw || null };
+    const s = String(raw == null ? '' : raw).trim();
+    if (TRUE.test(s)) return { value: true };
+    if (FALSE.test(s)) return { value: null };
+    return { error: `“${field.name}” is a checkbox: use yes or no.` };
+  }
+  if (typeof raw === 'number' && field.type === 'number') return Number.isFinite(raw) ? { value: raw } : { error: 'Not a number.' };
+  const s = String(raw == null ? '' : raw).trim();
+  if (!s) return { value: null };
+  switch (field.type) {
+    case 'number': {
+      let t = s.replace(/[\s\u00a0']/g, '');
+      if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(t)) t = t.replace(/,/g, '');
+      else if (/^-?\d+,\d+$/.test(t)) t = t.replace(',', '.');
+      const n = /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(t) ? Number(t) : NaN;
+      return Number.isFinite(n) ? { value: n } : { error: `“${field.name}” is a number.` };
+    }
+    case 'date':
+      return isISODate(s) ? { value: s } : { error: `“${field.name}” is a date (YYYY-MM-DD).` };
+    case 'select': {
+      const o = field.options.find((x) => same(x, s));
+      return o ? { value: o } : { error: `“${field.name}”: choose one of ${field.options.join(', ') || '(no options yet)'}.` };
+    }
+    case 'url': {
+      const u = /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(s) && !/^[\w.+-]+@/.test(s) ? `https://${s}` : s;
+      const ok = safeUrl(u);
+      return ok ? { value: ok.slice(0, 2000) } : { error: `“${field.name}” is a web address (https://…) or mailto: link.` };
+    }
+    default:
+      return { value: s.slice(0, 2000) };
+  }
+}
+
+/** Display / CSV / search text for a value. */
+function formatValue(field, v) {
+  if (v == null || v === '') return '';
+  if (field.type === 'checkbox') return v ? 'Yes' : '';
+  return String(v);
+}
+
+/** Keep only values of known fields, coerced to their type. */
+function normValues(values, fields) {
+  const out = {};
+  if (!values || typeof values !== 'object' || Array.isArray(values)) return out;
+  for (const f of fields) {
+    if (!(f.id in values)) continue;
+    const r = coerceValue(f, values[f.id]);
+    if (!r.error && r.value != null) out[f.id] = r.value;
+  }
+  return out;
+}
+
+/** Set a task's value for a field from user input. Returns an error string or null. */
+function setFieldValue(task, field, raw) {
+  const r = coerceValue(field, raw);
+  if (r.error) return r.error;
+  task.values = { ...(task.values || {}) };
+  if (r.value == null) delete task.values[field.id];
+  else task.values[field.id] = r.value;
+  return null;
+}
+
+function nextFieldId(plan) {
+  let n = 0;
+  for (const f of plan.fields || []) n = Math.max(n, Number(f.id.slice(1)));
+  return `f${n + 1}`;
+}
+
+function checkName(plan, name, selfId) {
+  const s = String(name == null ? '' : name).trim();
+  if (!s) return { error: 'Enter a column name.' };
+  if (s.length > 60) return { error: 'Column names can be at most 60 characters.' };
+  const res = RESERVED_NAMES.find((r) => same(r, s));
+  if (res) return { error: `“${res}” is a built-in column. Choose another name.` };
+  const clash = (plan.fields || []).find((f) => f.id !== selfId && same(f.name, s));
+  if (clash) return { error: `There is already a column called “${clash.name}”.` };
+  return { name: s };
+}
+
+/** Add a custom column. Returns { field } or { error }. */
+function addField(plan, { name, type = 'text', options = [] } = {}) {
+  plan.fields = plan.fields || [];
+  if (plan.fields.length >= MAX_FIELDS) return { error: `A plan can have at most ${MAX_FIELDS} custom columns.` };
+  const n = checkName(plan, name);
+  if (n.error) return n;
+  if (!TYPES.includes(type)) return { error: 'Unknown column type.' };
+  const field = { id: nextFieldId(plan), name: n.name, type, options: type === 'select' ? normOptions(options) : [] };
+  plan.fields.push(field);
+  return { field };
+}
+
+function renameField(plan, id, name) {
+  const f = findField(plan, id);
+  if (!f) return 'Unknown column.';
+  const n = checkName(plan, name, id);
+  if (n.error) return n.error;
+  f.name = n.name;
+  return null;
+}
+
+/** Replace a single-select column's options; values no longer offered are cleared. */
+function setFieldOptions(plan, id, options) {
+  const f = findField(plan, id);
+  if (!f || f.type !== 'select') return 'Not a single-select column.';
+  f.options = normOptions(options);
+  for (const r of plan.rows) {
+    if (r.kind === 'section' || !r.values || !(id in r.values)) continue;
+    const o = f.options.find((x) => same(x, r.values[id]));
+    r.values = { ...r.values };
+    if (o) r.values[id] = o;
+    else delete r.values[id];
+  }
+  return null;
+}
+
+/** Delete a custom column and every task's value for it. */
+function deleteField(plan, id) {
+  const f = findField(plan, id);
+  if (!f) return false;
+  const key = fieldKey(f);
+  plan.fields = plan.fields.filter((x) => x.id !== id);
+  for (const r of plan.rows) {
+    if (r.kind === 'section' || !r.values || !(id in r.values)) continue;
+    r.values = { ...r.values };
+    delete r.values[id];
+  }
+  const s = plan.settings || {};
+  if (s.columns && s.columns[key]) {
+    s.columns = { ...s.columns };
+    delete s.columns[key];
+  }
+  if (Array.isArray(s.columnOrder)) s.columnOrder = s.columnOrder.filter((k) => k !== key);
+  return true;
+}
+
+/** Keys of per-task custom fields (task.custom key/value pairs) with how many tasks use them. */
+function customKeyUsage(plan) {
+  const m = new Map();
+  for (const r of plan.rows) {
+    if (r.kind === 'section') continue;
+    const seen = new Set();
+    for (const c of r.custom || []) {
+      const k = String(c.key || '').trim();
+      const lk = k.toLowerCase();
+      if (!k || seen.has(lk)) continue;
+      seen.add(lk);
+      const e = m.get(lk) || { key: k, count: 0 };
+      e.count++;
+      m.set(lk, e);
+    }
+  }
+  return [...m.values()].sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+}
+
+function detectType(values) {
+  const v = values.map((x) => String(x).trim()).filter(Boolean);
+  if (!v.length) return 'text';
+  const all = (fn) => v.every(fn);
+  const num = { type: 'number', name: '' };
+  if (all((x) => !coerceValue(num, x).error)) return 'number';
+  if (all((x) => isISODate(x))) return 'date';
+  if (all((x) => /^(https?:\/\/|mailto:)/i.test(x) && safeUrl(x))) return 'url';
+  if (all((x) => /^(yes|no|true|false)$/i.test(x))) return 'checkbox';
+  return 'text';
+}
+
+/**
+ * Promote a per-task custom field key to a plan column ("Show as column").
+ * Reuses a column with the same name. Values that do not fit the column's type
+ * stay as per-task custom fields. Returns { field, moved, kept } or { error }.
+ */
+function promoteCustomKey(plan, key) {
+  const k = String(key || '').trim();
+  if (!k) return { error: 'Empty field name.' };
+  const tasks = plan.rows.filter((r) => r.kind !== 'section');
+  let field = fieldByName(plan, k);
+  if (!field) {
+    const vals = tasks.flatMap((t) => (t.custom || []).filter((c) => same(c.key, k)).map((c) => c.value));
+    const r = addField(plan, { name: k, type: detectType(vals) });
+    if (r.error) return r;
+    field = r.field;
+  }
+  let moved = 0;
+  let kept = 0;
+  for (const t of tasks) {
+    const rest = [];
+    for (const c of t.custom || []) {
+      if (!same(c.key, k)) {
+        rest.push(c);
+        continue;
+      }
+      const has = t.values && field.id in t.values;
+      if (!has && !setFieldValue(t, field, c.value)) moved++;
+      else if (has && String(t.values[field.id]) === String(c.value).trim()) moved++;
+      else {
+        rest.push(c);
+        kept++;
+      }
+    }
+    t.custom = rest;
+  }
+  return { field, moved, kept };
+}
+
+/** Distinct display values of a field across tasks (for filter menus). */
+function distinctValues(plan, field) {
+  const s = new Set();
+  for (const r of plan.rows) if (r.kind !== 'section') s.add(formatValue(field, r.values && r.values[field.id]));
+  return [...s].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b, undefined, { numeric: true })));
+}
+return { FIELD_TYPES, MAX_FIELDS, MAX_OPTIONS, fieldKey, fieldIdOfKey, RESERVED_NAMES, findField, fieldByName, normOptions, normFields, coerceValue, formatValue, normValues, setFieldValue, addField, renameField, setFieldOptions, deleteField, customKeyUsage, promoteCustomKey, distinctValues };
+})();
+
 // ---- model/stats.js
 const __model_stats = (() => {
 const { parseISO, todayISO, workdayDiff } = __schedule_calendar;
 const { isTask } = __model_tree;
+const { descText } = __util_sanitize;
+const { formatValue, findField } = __model_fields;
 // Header statistics and filtering helpers (pure).
+
+
 
 
 
@@ -1516,12 +2494,14 @@ function variance(task) {
 
 /**
  * Return a Set of matching task ids for the filter, or null when no filter is active.
- * filter: { text, owner, status, section, overdue }
+ * filter: { text, owner, status, section, overdue, field: { id, value } }
+ * (field.value is the display text, '' = empty)
  */
 function matchTasks(plan, tree, filter, now) {
   const f = filter || {};
   const text = (f.text || '').trim().toLowerCase();
-  if (!text && !f.owner && !f.status && !f.section && !f.overdue) return null;
+  const fieldFilter = f.field && findField(plan, f.field.id) ? { def: findField(plan, f.field.id), value: String(f.field.value) } : null;
+  if (!text && !f.owner && !f.status && !f.section && !f.overdue && !fieldFilter) return null;
   const day = statusDay(plan, now);
   const out = new Set();
   for (const t of tree.tasks) {
@@ -1529,8 +2509,11 @@ function matchTasks(plan, tree, filter, now) {
     if (f.status && t.status !== f.status) continue;
     if (f.section && String(tree.sectionOf.get(t.id)) !== String(f.section)) continue;
     if (f.overdue && (!isOverdue(t, day) || tree.isSummary(t.id))) continue;
+    if (fieldFilter && formatValue(fieldFilter.def, t.values && t.values[fieldFilter.def.id]) !== fieldFilter.value) continue;
     if (text) {
-      const hay = [t.name, t.owner, t.workstream, t.notes, t.desc, (t.tags || []).join(' '), tree.outline.get(t.id)]
+      const custom = (plan.fields || []).map((fd) => formatValue(fd, t.values && t.values[fd.id]));
+      const kv = (t.custom || []).map((c) => `${c.key} ${c.value}`);
+      const hay = [t.name, t.owner, t.workstream, t.notes, descText(t), (t.tags || []).join(' '), tree.outline.get(t.id), ...custom, ...kv]
         .join('\n')
         .toLowerCase();
       if (!hay.includes(text)) continue;
@@ -1548,7 +2531,13 @@ const { clampDuration, clampLag, MAX_DURATION, isISODate, parseISO, toISO, today
 const { LINK_TYPES } = __schedule_links;
 const { normalizeLevels } = __model_tree;
 const { sanitizeLinks } = __schedule_engine;
+const { sanitizeHtml, MAX_DESC_HTML } = __util_sanitize;
+const { markdownToHtml } = __util_markdown;
+const { normFields, normValues } = __model_fields;
 // Plan data model: defaults, normalisation of untrusted JSON and serialisation.
+
+
+
 
 
 
@@ -1590,6 +2579,7 @@ const DEFAULT_SETTINGS = {
   dayWidth: 0,
   labelMode: 'name',
   columns: null,
+  columnOrder: null,
   gridWidth: 0,
 };
 
@@ -1618,7 +2608,7 @@ function createTask(plan, fields = {}) {
     kind: 'task',
     level: 0,
     name: '',
-    desc: '',
+    descHtml: '',
     start: toISO(s),
     finish: toISO(finishFromDuration(s, duration)),
     duration,
@@ -1632,6 +2622,7 @@ function createTask(plan, fields = {}) {
     notes: '',
     preds: [],
     custom: [],
+    values: {},
     collapsed: false,
     baseline: null,
     createdAt: stamp,
@@ -1667,6 +2658,7 @@ function createPlan(fields = {}) {
     statusDate: '',
     status: 'On track',
     rows: [],
+    fields: [],
     nextId: 1,
     baselineSavedAt: null,
     logs: { risks: [], decisions: [], questions: [] },
@@ -1713,7 +2705,7 @@ function normTask(t, plan) {
     kind: 'task',
     level: Math.max(0, Math.floor(+t.level || 0)),
     name: str(t.name, 500),
-    desc: str(t.desc),
+    descHtml: t.descHtml != null ? sanitizeHtml(str(t.descHtml, MAX_DESC_HTML * 2)) : t.desc ? markdownToHtml(str(t.desc)) : '',
     start,
     finish,
     duration,
@@ -1729,6 +2721,7 @@ function normTask(t, plan) {
     custom: Array.isArray(t.custom)
       ? t.custom.filter((c) => c && typeof c === 'object').map((c) => ({ key: str(c.key, 200), value: str(c.value, 2000) }))
       : [],
+    values: normValues(t.values, plan.fields || []),
     collapsed: !!t.collapsed,
     baseline,
     createdAt: str(t.createdAt, 40) || nowStamp(),
@@ -1794,11 +2787,15 @@ function normalizePlan(input, report) {
     const cols = {};
     for (const [k, v] of Object.entries(s.columns)) {
       if (/^\w{1,30}$/.test(k) && v && typeof v === 'object') {
-        cols[k] = { visible: v.visible !== false, ...(v.explicit ? { explicit: true } : {}), width: Math.max(30, Math.min(800, +v.width || 0)) || undefined };
+        cols[k] = { visible: v.visible !== false, ...(v.explicit ? { explicit: true } : {}), width: +v.width > 0 ? Math.max(30, Math.min(800, +v.width)) : undefined };
       }
     }
     plan.settings.columns = cols;
   }
+  if (Array.isArray(s.columnOrder)) {
+    plan.settings.columnOrder = [...new Set(s.columnOrder.filter((k) => typeof k === 'string' && /^\w{1,30}$/.test(k)))].slice(0, 200);
+  }
+  plan.fields = normFields(input.fields);
   const seen = new Set();
   let maxId = 0;
   plan.rows = [];
@@ -1949,7 +2946,7 @@ function createStore({ plan, storage, readOnly = false, embedded = false, presen
     active: null, // { id, col }
     anchor: null,
     view: 'plan',
-    filter: { text: '', owner: '', status: '', section: '', overdue: false },
+    filter: { text: '', owner: '', status: '', section: '', overdue: false, field: null },
     cardId: null,
     d: null,
     saveState: 'saved',
@@ -2218,8 +3215,10 @@ const { createPlan, createTask, createSection, PALETTE } = __model_plan;
 const { parseISO, toISO, today, mondayOf, workdaysInclusive } = __schedule_calendar;
 const { normalizeLevels, computeTree } = __model_tree;
 const { autoSchedule, rollup } = __schedule_engine;
+const { markdownToHtml } = __util_markdown;
 // Generic demo plan shown on first open. Dates are relative to "now" so the
 // demo always has some finished, running and upcoming work.
+
 
 
 
@@ -2231,7 +3230,7 @@ const color = (name) => PALETTE.find((p) => p.name === name).color;
 const SPEC = [
   { section: 'Plan & prepare', color: 'Blue' },
   ['init', 0, 'Project initiation'],
-  ['kick', 1, 'Kick-off meeting', 1, '', 'Project manager', { desc: 'Agree scope, roles and the **4-week timeline**.\n\n- Confirm sponsor\n- Share the plan link' }],
+  ['kick', 1, 'Kick-off meeting', 1, '', 'Project manager', { descHtml: markdownToHtml('Agree scope, roles and the **4-week timeline**.\n\n- Confirm sponsor\n- Share the plan link') }],
   ['crit', 1, 'Define success criteria', 2, 'kick', 'Project manager'],
   ['raci', 1, 'Stakeholder map & RACI', 2, 'crit:SS:1', 'Change manager'],
   ['ready', 0, 'Readiness assessment'],
@@ -2338,9 +3337,11 @@ const { parseLinkList, formatLink, LINK_TYPES } = __schedule_links;
 const { linkError } = __schedule_engine;
 const { computeTree, leavesOf, insertionPoint, isTask, blockRange } = __model_tree;
 const { createTask, createSection, STATUSES, PRIORITIES } = __model_plan;
+const { sanitizeHtml, MAX_DESC_HTML } = __util_sanitize;
 const { clampDuration, clampLag, parseISO, toISO, isISODate, nextWorkday, wdIndex, fromWdIndex, applyDateEdit, finishFromDuration, durationFromDates } = __schedule_calendar;
 // Pure editing helpers used by the UI: field edits with status/progress sync,
 // predecessor text, links, moving bars and inserting rows.
+
 
 
 
@@ -2416,7 +3417,12 @@ function setTaskField(task, field, value, pinned) {
     case 'workstream':
       task[field] = String(value).trim().slice(0, 200);
       return null;
-    case 'desc':
+    case 'descHtml': {
+      const h = sanitizeHtml(value);
+      if (h.length > MAX_DESC_HTML) return 'Description is too long.';
+      task.descHtml = h;
+      return null;
+    }
     case 'notes':
       task[field] = String(value).slice(0, 20000);
       return null;
@@ -2541,7 +3547,11 @@ return { syncStatus, setTaskField, predsText, resolveRef, setPredsFromText, addL
 const __io_csv = (() => {
 const { formatLink } = __schedule_links;
 const { variance } = __model_stats;
+const { formatValue } = __model_fields;
+const { descText } = __util_sanitize;
 // CSV export (flat, with outline level). Pure.
+
+
 
 
 
@@ -2554,11 +3564,12 @@ function cell(v) {
 const CSV_COLUMNS = [
   'ID', 'Outline', 'Outline level', 'Section', 'Name', 'Start', 'Finish', 'Duration', 'Progress %',
   'Status', 'Priority', 'Owner', 'Workstream', 'Tags', 'Milestone', 'Predecessors', 'Baseline start',
-  'Baseline finish', 'Variance', 'Notes',
+  'Baseline finish', 'Variance', 'Notes', 'Description',
 ];
 
 function toCSV(plan, tree) {
-  const lines = [CSV_COLUMNS.map(cell).join(',')];
+  const fields = plan.fields || [];
+  const lines = [[...CSV_COLUMNS, ...fields.map((f) => f.name)].map(cell).join(',')];
   for (const r of plan.rows) {
     if (r.kind === 'section') continue;
     const sec = tree.byId.get(tree.sectionOf.get(r.id));
@@ -2585,6 +3596,8 @@ function toCSV(plan, tree) {
         r.baseline ? r.baseline.finish : '',
         v == null ? '' : v,
         r.notes,
+        descText(r),
+        ...fields.map((f) => formatValue(f, r.values && r.values[f.id])),
       ]
         .map(cell)
         .join(',')
@@ -2593,26 +3606,6 @@ function toCSV(plan, tree) {
   return '\uFEFF' + lines.join('\r\n') + '\r\n';
 }
 return { CSV_COLUMNS, toCSV };
-})();
-
-// ---- util/escape.js
-const __util_escape = (() => {
-
-const MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-
-function escapeHtml(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => MAP[c]);
-}
-
-/** JSON safe to place inside a <script> element. */
-function jsonForScript(value) {
-  return JSON.stringify(value)
-    .replace(/</g, '\\u003c')
-    .replace(/>/g, '\\u003e')
-    .replace(/\u2028/g, '\\u2028')
-    .replace(/\u2029/g, '\\u2029');
-}
-return { escapeHtml, jsonForScript };
 })();
 
 // ---- io/standalone.js
@@ -3050,8 +4043,10 @@ const __ui_gantt_render = (() => {
 const { escapeHtml: esc } = __util_escape;
 const { parseISO, weekday } = __schedule_calendar;
 const { ticks } = __ui_gantt_scale;
+const { descText, firstLine } = __util_sanitize;
 // Gantt SVG renderer (string output). Used by the live chart (a window of rows),
 // the print layout and the PNG export. No DOM access.
+
 
 
 
@@ -3281,7 +4276,9 @@ function renderGantt(o) {
     }
     const text = o.labelMode === 'owner' ? t.owner : o.labelMode === 'none' ? '' : t.name;
     if (text) parts.push(`<text class="lbl" x="${r1(b.x2 + (o.interactive ? 15 : 6))}" y="${r1(cy + 4)}">${esc(text)}</text>`);
-    bars.push(`<g class="${cls}" data-id="${t.id}">${parts.join('')}</g>`);
+    const line = o.interactive ? firstLine(descText(t)) : '';
+    const title = o.interactive ? `<title>${esc(t.name)}${line ? ` — ${esc(line)}` : ''}&#10;Click to open details · drag to move</title>` : '';
+    bars.push(`<g class="${cls}" data-id="${t.id}">${title}${parts.join('')}</g>`);
   }
   out.push(`<g class="bars">${bars.join('')}</g>`);
   if (o.header) out.push(renderHeader(range, ppd, width, { todayDay: o.todayDay }));
@@ -3299,15 +4296,18 @@ return { HEADER_H, GANTT_CSS, barGeom, linkPath, renderHeader, renderGantt };
 
 // ---- ui/grid/columns.js
 const __ui_grid_columns = (() => {
+const { fieldKey, FIELD_TYPES } = __model_fields;
+// Grid column definitions (built-in + plan custom fields) and the per-plan
+// order / visibility / width settings saved in plan.settings. Pure.
 
-// Grid column definitions and per-plan visibility / width settings.
+
 const COLUMNS = [
   { key: 'num', label: '#', width: 52, fixed: true },
   { key: 'name', label: 'Task name', width: 300, fixed: true, edit: 'text' },
   { key: 'start', label: 'Start', width: 104, edit: 'date', align: 'r' },
   { key: 'finish', label: 'Finish', width: 104, edit: 'date', align: 'r' },
-  { key: 'duration', label: 'Dur.', width: 56, edit: 'text', align: 'r', title: 'Duration in working days' },
-  { key: 'progress', label: '%', width: 64, edit: 'text', align: 'r', title: 'Progress %' },
+  { key: 'duration', label: 'Dur.', menuLabel: 'Duration', width: 56, edit: 'text', align: 'r', title: 'Duration in working days' },
+  { key: 'progress', label: '%', menuLabel: 'Progress %', width: 64, edit: 'text', align: 'r', title: 'Progress %' },
   { key: 'owner', label: 'Owner', width: 120, edit: 'text' },
   { key: 'preds', label: 'Predecessors', width: 116, edit: 'text', title: 'e.g. 3, 1.2FS+2d, #7SS-1d' },
   { key: 'status', label: 'Status', width: 104, edit: 'select' },
@@ -3317,11 +4317,49 @@ const COLUMNS = [
   { key: 'id', label: 'ID', width: 52, align: 'r', hidden: true, title: 'Task ID (use #ID in predecessors)' },
 ];
 
+const TYPE_WIDTH = { text: 140, person: 120, number: 90, date: 104, select: 120, checkbox: 72, url: 160 };
+const TYPE_EDIT = { select: 'select', checkbox: 'checkbox', date: 'date' };
+
+function customColumn(f) {
+  const type = FIELD_TYPES.find((t) => t.type === f.type);
+  return {
+    key: fieldKey(f),
+    label: f.name,
+    width: TYPE_WIDTH[f.type] || 120,
+    edit: TYPE_EDIT[f.type] || 'text',
+    align: f.type === 'number' ? 'r' : f.type === 'checkbox' ? 'c' : undefined,
+    title: `${f.name} · custom ${type ? type.label.toLowerCase() : 'text'} column`,
+    field: f,
+  };
+}
+
+const allColumns = (plan) => [...COLUMNS, ...(plan.fields || []).map(customColumn)];
+const columnLabel = (c) => c.menuLabel || c.label;
+
+/** Movable column keys in display order (saved order first, new columns at their natural place). */
+function columnOrder(plan) {
+  const defs = allColumns(plan).filter((c) => !c.fixed);
+  const keys = new Set(defs.map((c) => c.key));
+  const out = (plan.settings.columnOrder || []).filter((k) => keys.has(k));
+  const placed = new Set(out);
+  defs.forEach((c, i) => {
+    if (placed.has(c.key)) return;
+    let at = 0;
+    for (let j = i - 1; j >= 0; j--) at = Math.max(at, out.indexOf(defs[j].key) + 1);
+    out.splice(at, 0, c.key);
+    placed.add(c.key);
+  });
+  return out;
+}
+
 function columnState(plan) {
   const s = plan.settings.columns || {};
-  return COLUMNS.map((c) => {
+  const defs = allColumns(plan);
+  const byKey = new Map(defs.map((c) => [c.key, c]));
+  const ordered = [...defs.filter((c) => c.fixed), ...columnOrder(plan).map((k) => byKey.get(k))];
+  return ordered.map((c) => {
     const user = s[c.key] || {};
-    const dflt = typeof c.hidden === 'function' ? !c.hidden(plan) : !c.hidden;
+    const dflt = c.field ? true : typeof c.hidden === 'function' ? !c.hidden(plan) : !c.hidden;
     return {
       ...c,
       visible: c.fixed ? true : user.explicit ? !!user.visible : dflt,
@@ -3333,7 +4371,88 @@ function columnState(plan) {
 function visibleColumns(plan) {
   return columnState(plan).filter((c) => c.visible);
 }
-return { COLUMNS, columnState, visibleColumns };
+
+function setColumnVisible(plan, key, on) {
+  const cs = (plan.settings.columns = { ...(plan.settings.columns || {}) });
+  cs[key] = { ...(cs[key] || {}), visible: !!on, explicit: true };
+}
+
+/**
+ * Move a column among the *visible* movable columns by `delta` steps
+ * (Move left / Move right). Returns false when it cannot move.
+ */
+function moveColumn(plan, key, delta) {
+  const order = columnOrder(plan);
+  const vis = new Set(visibleColumns(plan).map((c) => c.key));
+  const shown = order.filter((k) => vis.has(k));
+  const i = shown.indexOf(key);
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= shown.length) return false;
+  return moveColumnTo(plan, key, delta > 0 ? (shown[j + 1] ?? null) : shown[j]);
+}
+
+/** Put `key` right before `beforeKey` (null = last). Used by header drag-and-drop. */
+function moveColumnTo(plan, key, beforeKey) {
+  const order = columnOrder(plan);
+  const i = order.indexOf(key);
+  if (i < 0 || key === beforeKey) return false;
+  const next = order.filter((k) => k !== key);
+  const at = beforeKey == null ? next.length : next.indexOf(beforeKey);
+  if (at < 0) return false;
+  next.splice(at, 0, key);
+  if (next.join() === order.join()) return false;
+  plan.settings.columnOrder = next;
+  return true;
+}
+
+function resetColumns(plan) {
+  plan.settings.columns = null;
+  plan.settings.columnOrder = null;
+}
+return { COLUMNS, customColumn, allColumns, columnLabel, columnOrder, columnState, visibleColumns, setColumnVisible, moveColumn, moveColumnTo, resetColumns };
+})();
+
+// ---- ui/grid/edittrigger.js
+const __ui_grid_edittrigger = (() => {
+
+// Pure decisions for how a grid click or key press is interpreted
+// (select / edit / open details). Kept free of DOM so it can be unit-tested.
+
+const ACTS = { toggle: 'toggle', color: 'color', 'sec-menu': 'sec-menu', card: 'open', check: 'check' };
+
+/**
+ * A click on a grid cell. `detail` is the browser's click count (MouseEvent.detail):
+ * the second click of a double-click arrives as a click with detail 2 even when the
+ * first click re-rendered the row, so double-click editing does not depend on the
+ * separate `dblclick` event (which Chrome drops when the target node was replaced).
+ */
+function clickAction({ detail = 1, act = null, editable = false, section = false } = {}) {
+  if (act && ACTS[act]) return ACTS[act];
+  if (detail === 2) return editable ? 'edit' : section ? 'select' : 'open';
+  return 'select';
+}
+
+/**
+ * A key press on the selected cell (grid focused, not editing).
+ * Returns 'edit' | 'type' (start editing with the typed character) | 'open' |
+ * 'toggle-check' | null (not handled here).
+ * Enter opens details from the Task name / # cells (and read-only cells), edits other cells;
+ * Shift+Enter always opens details; F2 always edits.
+ */
+function keyAction({ key, mod = false, alt = false, shift = false, col = 'name', editable = false, editKind = 'text', section = false } = {}) {
+  if (key === 'F2') return editable ? 'edit' : null;
+  if (key === 'Enter') {
+    if (mod) return null;
+    if (section) return 'edit';
+    if (shift || col === 'num' || col === 'name' || !editable) return 'open';
+    return editKind === 'checkbox' ? 'toggle-check' : 'edit';
+  }
+  if (key === ' ' && editable && editKind === 'checkbox' && !section) return 'toggle-check';
+  if (key.length === 1 && key !== ' ' && !mod && !alt && editable && !section && editKind === 'text') return 'type';
+  if (key.length === 1 && key === ' ' && !mod && !alt && editable && !section && editKind === 'text') return 'type';
+  return null;
+}
+return { clickAction, keyAction };
 })();
 
 // ---- ui/format.js
@@ -3379,16 +4498,24 @@ return { fmtDate, fmtDateLong, fmtStamp, fmtVariance, statusSlug };
 // ---- ui/grid/grid.js
 const __ui_grid_grid = (() => {
 const { escapeHtml: esc } = __util_escape;
-const { visibleColumns } = __ui_grid_columns;
+const { visibleColumns, moveColumnTo } = __ui_grid_columns;
+const { clickAction, keyAction } = __ui_grid_edittrigger;
+const { findField, formatValue, setFieldValue } = __model_fields;
+const { descText } = __util_sanitize;
+const { safeUrl } = __util_markdown;
 const { fmtDate, fmtVariance, statusSlug } = __ui_format;
 const { predsText, setTaskField, setPredsFromText } = __model_edit;
 const { moveRows, isTask } = __model_tree;
 const { STATUSES, PRIORITIES } = __model_plan;
 const { variance, isOverdue, statusDay } = __model_stats;
 const { parseISO, toYMD } = __schedule_calendar;
-const { mod } = __ui_dom;
+const { mod, isTyping } = __ui_dom;
 // Task grid: virtualised rows, inline editing, keyboard navigation, drag-and-drop
 // reordering / re-parenting and column resize.
+
+
+
+
 
 
 
@@ -3417,13 +4544,14 @@ function summaryStatus(tree, id) {
 
 function createGrid(app, root) {
   const store = app.store;
-  root.innerHTML = `<div class="g-scroll"><div class="g-head" role="row"></div><div class="g-body" tabindex="0" role="grid" aria-label="Tasks. Arrow keys move, Enter edits, Tab indents, Insert adds a row." aria-multiselectable="true"><div class="g-rows" role="rowgroup"></div><div class="drop-line" hidden></div></div><div class="g-empty" hidden></div></div>`;
+  root.innerHTML = `<div class="g-scroll"><div class="g-head" role="row"></div><div class="g-body" tabindex="0" role="grid" aria-label="Tasks. Arrow keys move, Enter edits, Tab indents, Insert adds a row." aria-multiselectable="true"><div class="g-rows" role="rowgroup"></div><div class="drop-line" hidden></div></div><div class="g-empty" hidden></div></div><div class="g-tip" role="tooltip" hidden></div>`;
   const scroll = root.querySelector('.g-scroll');
   const head = root.querySelector('.g-head');
   const body = root.querySelector('.g-body');
   const rowsEl = root.querySelector('.g-rows');
   const dropLine = root.querySelector('.drop-line');
   const empty = root.querySelector('.g-empty');
+  const tipEl = root.querySelector('.g-tip');
   let win = { from: -1, to: -1 };
   let cols = [];
   let editing = null;
@@ -3431,6 +4559,7 @@ function createGrid(app, root) {
   let suppressClick = false;
 
   const rowH = () => app.rowH();
+  const colDef = (key) => cols.find((x) => x.key === key);
 
   function canEdit(r, col) {
     if (!r) return false;
@@ -3453,7 +4582,7 @@ function createGrid(app, root) {
         const tog = summary
           ? `<button type="button" class="tog" data-act="toggle" tabindex="-1" aria-expanded="${!t.collapsed}" aria-label="${t.collapsed ? 'Expand' : 'Collapse'} ${esc(t.name)}">${t.collapsed ? '▸' : '▾'}</button>`
           : '<span class="tog-sp"></span>';
-        return `<span class="ind" style="width:${t.level * 18}px"></span>${tog}${t.milestone ? '<span class="ms-ic" title="Milestone">◆</span>' : ''}<span class="nm">${esc(t.name) || '<span class="muted">(untitled)</span>'}</span>`;
+        return `<span class="ind" style="width:${t.level * 18}px"></span>${tog}${t.milestone ? '<span class="ms-ic" title="Milestone">◆</span>' : ''}<span class="nm">${esc(t.name) || '<span class="muted">(untitled)</span>'}</span>${t.descHtml ? '<span class="has-desc" title="Has a description" aria-hidden="true">≡</span>' : ''}<button type="button" class="open-btn" data-act="card" tabindex="-1" title="Open task details (Enter)" aria-label="Open details for ${esc(t.name || 'task')}">↗</button>`;
       }
       case 'start':
         return esc(fmtDate(t.start, ctx.year));
@@ -3482,8 +4611,20 @@ function createGrid(app, root) {
       case 'id':
         return `#${t.id}`;
       default:
-        return '';
+        return c.field ? customCell(t, c.field) : '';
     }
+  }
+
+  function customCell(t, f) {
+    const v = t.values ? t.values[f.id] : undefined;
+    if (f.type === 'checkbox') return `<span class="cf-chk" data-act="check" role="checkbox" aria-checked="${!!v}" aria-label="${esc(f.name)}">${v ? '☑' : '☐'}</span>`;
+    if (v == null || v === '') return '';
+    if (f.type === 'url') {
+      const href = safeUrl(v);
+      return href ? `<a class="cf-url" href="${esc(href)}" target="_blank" rel="noopener noreferrer" tabindex="-1" title="${esc(href)}">${esc(String(v).replace(/^https?:\/\//, ''))}</a>` : esc(v);
+    }
+    if (f.type === 'date') return esc(fmtDate(v, toYMD(parseISO(store.plan.start))[0]));
+    return esc(formatValue(f, v));
   }
 
   function rowHTML(r, i, ctx) {
@@ -3506,7 +4647,7 @@ function createGrid(app, root) {
     const cells = cols
       .map(
         (c) =>
-          `<div class="gc c-${c.key}${c.align === 'r' ? ' r' : ''}${act === c.key ? ' act' : ''}" data-col="${c.key}" role="gridcell" id="gc-${r.id}-${c.key}">${cellHTML(r, c, ctx)}</div>`
+          `<div class="gc c-${c.key}${c.field ? ' c-cf' : ''}${c.align === 'r' ? ' r' : c.align === 'c' ? ' c' : ''}${act === c.key ? ' act' : ''}" data-col="${c.key}" role="gridcell" id="gc-${r.id}-${c.key}">${cellHTML(r, c, ctx)}</div>`
       )
       .join('');
     return `<div class="${cls}" role="row" aria-selected="${sel}" aria-level="${r.level + 1}" data-id="${r.id}" style="top:${top}px${tint ? `;--tint:${tint}` : ''}">${cells}</div>`;
@@ -3522,7 +4663,7 @@ function createGrid(app, root) {
     head.innerHTML = cols
       .map(
         (c) =>
-          `<div class="gh${c.align === 'r' ? ' r' : ''}" data-col="${c.key}" role="columnheader"${c.title ? ` title="${esc(c.title)}"` : ''}>${esc(c.label)}${c.key !== 'num' ? `<span class="rs" data-rs="${c.key}" title="Drag to resize" aria-hidden="true"></span>` : ''}</div>`
+          `<div class="gh${c.align === 'r' ? ' r' : ''}${c.field ? ' gh-cf' : ''}" data-col="${c.key}" role="columnheader"${c.fixed ? '' : ` draggable="true"`} title="${esc(c.title ? `${c.title} · ` : '')}${c.fixed ? 'Right-click for column options' : 'Drag to reorder · right-click for options'}"><span class="gh-l">${esc(c.label)}</span>${c.key !== 'num' ? `<span class="rs" data-rs="${c.key}" title="Drag to resize" aria-hidden="true"></span>` : ''}</div>`
       )
       .join('');
     const n = store.d.visible.length;
@@ -3581,6 +4722,11 @@ function createGrid(app, root) {
   // ---- editing -----------------------------------------------------------
   function rawValue(r, col) {
     if (r.kind === 'section') return r.name;
+    const cf = colDef(col);
+    if (cf && cf.field) {
+      const v = r.values ? r.values[cf.field.id] : undefined;
+      return cf.field.type === 'date' || cf.field.type === 'select' ? v || '' : formatValue(cf.field, v);
+    }
     switch (col) {
       case 'preds':
         return predsText(r, store.d.tree);
@@ -3608,9 +4754,18 @@ function createGrid(app, root) {
     if (!cell) return;
     let input;
     const orig = rawValue(r, col);
-    if (col === 'status' || col === 'priority') {
+    const field = colDef(col) && colDef(col).field;
+    if (field && field.type === 'checkbox') return toggleCheck(id, col);
+    if (col === 'status' || col === 'priority' || (field && field.type === 'select')) {
       input = document.createElement('select');
-      input.innerHTML = (col === 'status' ? STATUSES : PRIORITIES).map((s) => `<option${s === orig ? ' selected' : ''}>${esc(s)}</option>`).join('');
+      const list = field ? ['', ...field.options] : col === 'status' ? STATUSES : PRIORITIES;
+      input.innerHTML = list.map((s) => `<option${s === orig ? ' selected' : ''}>${esc(s)}</option>`).join('');
+    } else if (field) {
+      input = document.createElement('input');
+      input.type = field.type === 'date' ? 'date' : 'text';
+      if (field.type === 'number') input.inputMode = 'decimal';
+      if (field.type === 'url') input.placeholder = 'https://';
+      input.value = initial != null ? initial : orig;
     } else {
       input = document.createElement('input');
       input.type = col === 'start' || col === 'finish' ? 'date' : 'text';
@@ -3620,7 +4775,7 @@ function createGrid(app, root) {
     input.className = 'ed';
     input.setAttribute('aria-label', `Edit ${col}`);
     input.spellcheck = false;
-    editing = { id, col, input, orig };
+    editing = { id, col, input, orig, field };
     cell.classList.add('editing');
     if (r.kind === 'section' || col === 'name') {
       const nm = cell.querySelector('.nm');
@@ -3668,6 +4823,10 @@ function createGrid(app, root) {
           if (errs.length) setTimeout(() => app.toast(errs.join(' '), 'error', 7000));
           return undefined;
         }
+        if (ed.field) {
+          const f = findField(plan, ed.field.id);
+          return f ? setFieldValue(t, f, v) || undefined : false;
+        }
         if (ed.col === 'name' && !v.trim()) return 'Task name cannot be empty.';
         return setTaskField(t, ed.col, v) || undefined;
       });
@@ -3676,6 +4835,19 @@ function createGrid(app, root) {
       body.focus({ preventScroll: true });
       if (dRow || dCol) move(dRow, dCol, false);
     }
+  }
+
+  function toggleCheck(id, col) {
+    const c = colDef(col);
+    if (!c || !c.field || store.readOnly) return store.readOnly ? store.emit('readonly') : undefined;
+    const r = store.d.tree.byId.get(id);
+    if (!r || r.kind === 'section') return undefined;
+    return store.commit(`Edit ${c.field.name}`, (plan) => {
+      const t = plan.rows.find((x) => x.id === id);
+      const f = findField(plan, c.field.id);
+      if (!t || !f) return false;
+      return setFieldValue(t, f, !(t.values && t.values[f.id])) || undefined;
+    });
   }
 
   // ---- selection & keyboard ---------------------------------------------
@@ -3701,6 +4873,22 @@ function createGrid(app, root) {
     const k = e.key;
     const page = Math.max(1, Math.floor((scroll.clientHeight - HEAD_H) / rowH()) - 1);
     if (k !== 'Tab' && k !== 'Shift') released = false;
+    const decide = () => {
+      const c = colDef(a.col);
+      const section = r.kind === 'section';
+      return keyAction({
+        key: k, mod: mod(e), alt: e.altKey, shift: e.shiftKey, col: a.col, section,
+        editable: !store.readOnly && canEdit(r, section ? 'name' : a.col),
+        editKind: c ? c.edit || 'text' : 'text',
+      });
+    };
+    const doKey = (what) => {
+      if (what === 'edit') return startEdit(r.id, r.kind === 'section' ? 'name' : a.col);
+      if (what === 'open') return app.openCard(r.id);
+      if (what === 'toggle-check') return toggleCheck(r.id, a.col);
+      if (what === 'type') return startEdit(r.id, a.col, k);
+      return undefined;
+    };
     const handled = () => {
       e.preventDefault();
       e.stopPropagation();
@@ -3735,13 +4923,10 @@ function createGrid(app, root) {
       case 'Enter':
         handled();
         if (mod(e)) return app.addTask();
-        if (!r) return undefined;
-        if (r.kind === 'section') return startEdit(r.id, 'name');
-        if (e.shiftKey || a.col === 'num' || !canEdit(r, a.col)) return app.openCard(r.id);
-        return startEdit(r.id, a.col);
+        return r ? doKey(decide()) : undefined;
       case 'F2':
         handled();
-        return r && startEdit(r.id, r.kind === 'section' ? 'name' : a.col);
+        return r ? doKey(decide()) : undefined;
       case 'Insert':
         handled();
         return e.shiftKey ? app.addSection() : app.addTask();
@@ -3761,18 +4946,27 @@ function createGrid(app, root) {
         }
         return app.toast('Grid released: Tab now moves focus out of the grid.', 'info', 2000);
       case ' ':
+        if (r && decide() === 'toggle-check') {
+          handled();
+          return doKey('toggle-check');
+        }
         if (r && (r.kind === 'section' || store.d.tree.isSummary(r.id))) {
           handled();
           return app.toggleCollapse(r.id);
         }
         return undefined;
+      case 'ContextMenu':
+        if (!r) return undefined;
+        handled();
+        return openRowMenu(r.id, rowsEl.querySelector(`.gr[data-id="${r.id}"] [data-col="${a.col}"]`) || body);
       default:
-        if (r && k.length === 1 && !mod(e) && !e.altKey && r.kind !== 'section' && canEdit(r, a.col)) {
-          const c = cols.find((x) => x.key === a.col);
-          if (c && c.edit === 'text') {
-            handled();
-            return startEdit(r.id, a.col, k);
-          }
+        if (r && k === 'F10' && e.shiftKey) {
+          handled();
+          return openRowMenu(r.id, rowsEl.querySelector(`.gr[data-id="${r.id}"] [data-col="${a.col}"]`) || body);
+        }
+        if (r && decide() === 'type') {
+          handled();
+          return doKey('type');
         }
     }
     return undefined;
@@ -3783,6 +4977,10 @@ function createGrid(app, root) {
   });
 
   // ---- mouse ---------------------------------------------------------------
+  // Double-click detection uses the click count of the *second* click
+  // (event.detail === 2) instead of the dblclick event: the first click selects
+  // the row, which re-renders it, so a native dblclick would target a node that
+  // is no longer in the document and never fire.
   rowsEl.addEventListener('click', (e) => {
     if (suppressClick) {
       suppressClick = false;
@@ -3790,6 +4988,7 @@ function createGrid(app, root) {
     }
     const rowEl = e.target.closest('.gr');
     if (!rowEl || e.target.closest('.ed')) return;
+    if (e.target.closest('a[href]')) return;
     const id = Number(rowEl.dataset.id);
     const actEl = e.target.closest('[data-act]');
     const cell = e.target.closest('[data-col]');
@@ -3797,19 +4996,134 @@ function createGrid(app, root) {
     if (act === 'toggle') return app.toggleCollapse(id);
     if (act === 'color') return app.sectionColor(id, actEl);
     if (act === 'sec-menu') return app.sectionMenu(id, actEl);
-    app.select(id, { extend: e.shiftKey, toggle: mod(e), col: cell ? cell.dataset.col : 'name', keepCard: true });
-    if (act === 'card') return app.openCard(id);
+    const r = store.d.tree.byId.get(id);
+    const col = cell ? cell.dataset.col : 'name';
+    const section = !!r && r.kind === 'section';
+    const what = clickAction({ detail: e.detail, act, editable: !store.readOnly && canEdit(r, section ? 'name' : col), section });
+    if (what === 'edit') return startEdit(id, section ? 'name' : col);
+    if (what === 'check') {
+      if (e.detail > 1) return undefined;
+      app.select(id, { col, keepCard: true });
+      return toggleCheck(id, col);
+    }
+    if (what === 'open') {
+      if (r && r.kind !== 'section') return app.openCard(id, { focus: act === 'card' });
+      return undefined;
+    }
+    if (e.detail > 1) return undefined;
+    app.select(id, { extend: e.shiftKey, toggle: mod(e), col, keepCard: true });
     body.focus({ preventScroll: true });
     return undefined;
   });
-  rowsEl.addEventListener('dblclick', (e) => {
+
+  function openRowMenu(id, at) {
+    hideTip();
+    if (!store.selection.has(id)) app.select(id, { keepCard: true });
+    app.rowMenu(id, at);
+  }
+  rowsEl.addEventListener('contextmenu', (e) => {
     const rowEl = e.target.closest('.gr');
+    if (!rowEl || e.target.closest('.ed') || isTyping(e)) return;
+    e.preventDefault();
     const cell = e.target.closest('[data-col]');
-    if (!rowEl || !cell || e.target.closest('[data-act]')) return;
     const id = Number(rowEl.dataset.id);
-    const r = store.d.tree.byId.get(id);
-    if (canEdit(r, cell.dataset.col)) startEdit(id, cell.dataset.col);
-    else if (r && r.kind !== 'section') app.openCard(id);
+    if (!store.selection.has(id)) app.select(id, { col: cell ? cell.dataset.col : 'name', keepCard: true });
+    openRowMenu(id, { x: e.clientX, y: e.clientY });
+  });
+
+  // hover preview: first lines of the description (text only, never HTML)
+  let tipTimer = 0;
+  let tipId = null;
+  function hideTip() {
+    clearTimeout(tipTimer);
+    tipId = null;
+    tipEl.hidden = true;
+  }
+  rowsEl.addEventListener('mouseover', (e) => {
+    const nameCell = e.target.closest('.gr.task .c-name');
+    const id = nameCell ? Number(nameCell.closest('.gr').dataset.id) : null;
+    if (id === tipId) return;
+    hideTip();
+    if (id == null || drag || editing) return;
+    const t = store.d.tree.byId.get(id);
+    const text = t ? descText(t) : '';
+    if (!text) return;
+    tipId = id;
+    tipTimer = setTimeout(() => {
+      const lines = text.split('\n').filter((l) => l.trim()).slice(0, 4);
+      tipEl.textContent = '';
+      const h = document.createElement('b');
+      h.textContent = t.name;
+      tipEl.appendChild(h);
+      for (const l of lines) {
+        const d = document.createElement('div');
+        d.textContent = l.length > 160 ? `${l.slice(0, 159)}…` : l;
+        tipEl.appendChild(d);
+      }
+      const rb = nameCell.getBoundingClientRect();
+      const pb = root.getBoundingClientRect();
+      tipEl.style.left = `${Math.max(4, rb.left - pb.left + 24)}px`;
+      tipEl.style.top = `${rb.bottom - pb.top + 2}px`;
+      tipEl.hidden = false;
+    }, 450);
+  });
+  rowsEl.addEventListener('mouseleave', hideTip);
+  scroll.addEventListener('scroll', hideTip, { passive: true });
+
+  // header: right-click menu, drag to reorder
+  head.addEventListener('contextmenu', (e) => {
+    const h = e.target.closest('.gh');
+    if (!h) return;
+    e.preventDefault();
+    app.columnsMenu({ x: e.clientX, y: e.clientY }, h.dataset.col);
+  });
+  let colDrag = null;
+  const clearMarks = () => head.querySelectorAll('.drop-before, .drop-after').forEach((n) => n.classList.remove('drop-before', 'drop-after'));
+  head.addEventListener('dragstart', (e) => {
+    const h = e.target.closest('.gh[draggable="true"]');
+    if (!h) return;
+    colDrag = h.dataset.col;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('application/x-planboard-col', colDrag);
+    h.classList.add('dragging');
+  });
+  const dropSpot = (e) => {
+    const h = e.target.closest('.gh');
+    if (!h || !colDrag) return null;
+    const c = colDef(h.dataset.col);
+    if (!c) return null;
+    if (c.fixed) {
+      const first = cols.find((x) => !x.fixed);
+      return first ? { el: head.querySelector(`.gh[data-col="${first.key}"]`), before: first.key, side: 'before' } : null;
+    }
+    const b = h.getBoundingClientRect();
+    const after = e.clientX > b.left + b.width / 2;
+    const i = cols.indexOf(c);
+    const next = cols.slice(i + 1).find((x) => !x.fixed);
+    return { el: h, before: after ? (next ? next.key : null) : c.key, side: after ? 'after' : 'before' };
+  };
+  head.addEventListener('dragover', (e) => {
+    const spot = dropSpot(e);
+    if (!spot) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    clearMarks();
+    if (spot.el) spot.el.classList.add(`drop-${spot.side}`);
+  });
+  head.addEventListener('drop', (e) => {
+    const spot = dropSpot(e);
+    clearMarks();
+    if (!spot) return;
+    e.preventDefault();
+    const key = colDrag;
+    colDrag = null;
+    if (spot.before === key) return;
+    store.commit('Move column', (plan) => (moveColumnTo(plan, key, spot.before) ? undefined : false), { touch: false, schedule: false });
+  });
+  head.addEventListener('dragend', () => {
+    colDrag = null;
+    clearMarks();
+    head.querySelectorAll('.dragging').forEach((n) => n.classList.remove('dragging'));
   });
 
   // drag rows by the # cell
@@ -3818,6 +5132,7 @@ function createGrid(app, root) {
   rowsEl.addEventListener('pointerdown', (e) => {
     const num = e.target.closest('.c-num');
     if (!num || e.button !== 0 || store.readOnly) return;
+    hideTip();
     const id = Number(num.closest('.gr').dataset.id);
     drag = { id, x: e.clientX, y: e.clientY, started: false, target: null };
   });
@@ -3908,6 +5223,7 @@ function createGrid(app, root) {
     const rs = e.target.closest('.rs');
     if (!rs) return;
     e.preventDefault();
+    e.stopPropagation();
     const key = rs.dataset.rs;
     const col = cols.find((c) => c.key === key);
     const x0 = e.clientX;
@@ -4290,7 +5606,8 @@ function createGantt(app, root) {
     tmp.setAttribute('d', '');
     winEl.querySelectorAll('.link-target').forEach((n) => n.classList.remove('link-target'));
     if (!a.moved) {
-      if (a.mode !== 'link') app.select(a.id, { col: 'name', keepCard: true });
+      // a click without dragging opens the task details
+      if (a.mode !== 'link') app.openCard(a.id, { focus: false });
       return;
     }
     suppressClick = true;
@@ -4331,7 +5648,7 @@ function createGantt(app, root) {
     }
     if (store.readOnly) {
       const bar = e.target.closest('.bar');
-      if (bar) app.select(Number(bar.dataset.id), { col: 'name', keepCard: true });
+      if (bar) app.openCard(Number(bar.dataset.id), { focus: false });
     }
   });
   winEl.addEventListener('dblclick', (e) => {
@@ -4359,106 +5676,304 @@ function createGantt(app, root) {
 return { createGantt };
 })();
 
-// ---- util/markdown.js
-const __util_markdown = (() => {
-const { escapeHtml } = __util_escape;
-// Tiny markdown subset: **bold**, *italic* / _italic_, `code`, [links](https://…),
-// bare URLs, "- " / "* " bullet lists, paragraphs and line breaks.
-// Input is escaped first, so raw HTML can never get through; only http(s) and
-// mailto links become <a> elements.
+// ---- ui/card/richtext.js
+const __ui_card_richtext = (() => {
+const { escapeHtml: esc } = __util_escape;
+const { sanitizeHtml } = __util_sanitize;
+const { markdownToHtml, looksLikeMarkdown, textToHtml, safeUrl } = __util_markdown;
+const { promptBox } = __ui_dialogs_modal;
+const { mod } = __ui_dom;
+// WYSIWYG description editor: contenteditable + a small toolbar, no libraries.
+// Pasted HTML (Word / Outlook / OneNote / web) and the editor's own HTML always
+// go through sanitizeHtml before they are stored; Markdown-looking plain text is
+// converted on paste.
 
 
-const SAFE_URL = /^(https?:\/\/|mailto:)[^\s"'<>`]+$/i;
 
-function safeUrl(url) {
-  const u = String(url || '').trim();
-  return SAFE_URL.test(u) ? u : null;
+
+
+
+const TOOLS = [
+  ['h1', 'H1', 'Heading 1'],
+  ['h2', 'H2', 'Heading 2'],
+  ['h3', 'H3', 'Heading 3'],
+  ['p', '¶', 'Normal text'],
+  null,
+  ['bold', '<b>B</b>', 'Bold (Ctrl+B)', true],
+  ['italic', '<i>I</i>', 'Italic (Ctrl+I)', true],
+  ['underline', '<u>U</u>', 'Underline (Ctrl+U)', true],
+  ['strikeThrough', '<s>S</s>', 'Strikethrough', true],
+  null,
+  ['ul', '•≡', 'Bulleted list'],
+  ['ol', '1≡', 'Numbered list'],
+  ['check', '☑', 'Checklist'],
+  ['quote', '❝', 'Quote'],
+  ['code', '&lt;/&gt;', 'Code block'],
+  null,
+  ['link', '🔗', 'Link (Ctrl+K)'],
+  ['table', '▦', 'Insert table'],
+  ['hr', '―', 'Horizontal rule'],
+  ['clear', 'T<sub>x</sub>', 'Clear formatting'],
+];
+
+function toolbarHTML() {
+  return `<div class="rt-bar" role="toolbar" aria-label="Description formatting">${TOOLS.map((t) =>
+    t ? `<button type="button" class="rt-b" data-rt="${t[0]}" title="${esc(t[2])}" aria-label="${esc(t[2])}"${t[3] ? ' aria-pressed="false"' : ''}>${t[1]}</button>` : '<span class="rt-sep" aria-hidden="true"></span>'
+  ).join('')}</div>`;
 }
 
-function unescapeEntities(s) {
-  return s
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '&');
+/** Clipboard → sanitized description HTML. */
+function pasteToHtml(cd) {
+  const html = cd.getData('text/html');
+  if (html && html.trim()) {
+    const s = sanitizeHtml(html);
+    if (s.replace(/<[^>]+>/g, '').trim() || /<(hr|table|input)/.test(s)) return s;
+  }
+  const text = cd.getData('text/plain');
+  if (!text) return '';
+  return looksLikeMarkdown(text) ? markdownToHtml(text) : textToHtml(text);
 }
 
-function link(text, rawUrl) {
-  const url = safeUrl(unescapeEntities(rawUrl));
-  if (!url) return text;
-  return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${text}</a>`;
-}
+const TABLE = '<table><thead><tr><th>Column 1</th><th>Column 2</th><th>Column 3</th></tr></thead><tbody><tr><td><br></td><td><br></td><td><br></td></tr><tr><td><br></td><td><br></td><td><br></td></tr></tbody></table><p><br></p>';
 
-function inline(escaped) {
-  const codes = [];
-  let s = escaped.replace(/`([^`]+)`/g, (_, c) => {
-    codes.push(`<code>${c}</code>`);
-    return `\u0000${codes.length - 1}\u0000`;
-  });
-  const links = [];
-  const stash = (html) => {
-    links.push(html);
-    return `\u0001${links.length - 1}\u0001`;
+/**
+ * Wire an editor. `onChange(html, ownerId)` receives sanitized HTML (debounced and on blur).
+ * Returns { set(html, ownerId), flush() }.
+ */
+function createRichText(wrap, { onChange }) {
+  const ed = wrap.querySelector('.rt-ed');
+  const bar = wrap.querySelector('.rt-bar');
+  let owner = null;
+  let saved = '';
+  let timer = 0;
+  let range = null;
+
+  const exec = (cmd, arg = null) => document.execCommand(cmd, false, arg);
+
+  function flush() {
+    clearTimeout(timer);
+    timer = 0;
+    if (owner == null) return;
+    const h = sanitizeHtml(ed.innerHTML);
+    if (h === saved) return;
+    saved = h;
+    onChange(h, owner);
+  }
+  const later = () => {
+    clearTimeout(timer);
+    timer = setTimeout(flush, 700);
   };
-  s = s.replace(/\[([^\]]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g, (_, t, u) => stash(link(t, u)));
-  s = s.replace(/(^|[\s(])((?:https?:\/\/|mailto:)[^\s<]+[^\s<.,;:!?)])/gi, (_, pre, u) => pre + stash(link(u, u)));
-  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');
-  s = s.replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\w)/g, '$1<em>$2</em>');
-  s = s.replace(/(^|[^_\w])_([^_\s][^_]*?)_(?!\w)/g, '$1<em>$2</em>');
-  s = s.replace(/\u0001(\d+)\u0001/g, (_, i) => links[+i]);
-  s = s.replace(/\u0000(\d+)\u0000/g, (_, i) => codes[+i]);
-  return s;
-}
 
-/** Render the markdown subset to safe HTML. */
-function renderMarkdown(src) {
-  // Control characters are dropped up front: they are never meaningful in a
-  // description and \u0000 / \u0001 are used as placeholders below.
-  const text = String(src == null ? '' : src).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
-  const lines = text.replace(/\r\n?/g, '\n').split('\n');
-  const out = [];
-  let para = [];
-  let list = null;
-  const flushPara = () => {
-    if (para.length) out.push(`<p>${para.map((l) => inline(escapeHtml(l))).join('<br>')}</p>`);
-    para = [];
-  };
-  const flushList = () => {
-    if (list) out.push(`<ul>${list.map((l) => `<li>${inline(escapeHtml(l))}</li>`).join('')}</ul>`);
-    list = null;
-  };
-  for (const line of lines) {
-    const m = /^\s*[-*•]\s+(.*)$/.exec(line);
-    if (m) {
-      flushPara();
-      (list = list || []).push(m[1]);
-    } else if (!line.trim()) {
-      flushPara();
-      flushList();
-    } else {
-      flushList();
-      para.push(line);
+  function saveRange() {
+    const s = window.getSelection();
+    if (s.rangeCount && ed.contains(s.anchorNode)) range = s.getRangeAt(0).cloneRange();
+  }
+  function restore() {
+    if (document.activeElement !== ed) ed.focus({ preventScroll: true });
+    if (range) {
+      const s = window.getSelection();
+      s.removeAllRanges();
+      s.addRange(range);
     }
   }
-  flushPara();
-  flushList();
-  return out.join('');
+  function closestIn(sel) {
+    const s = window.getSelection();
+    let n = s.anchorNode;
+    if (n && n.nodeType === 3) n = n.parentNode;
+    const hit = n && n.closest ? n.closest(sel) : null;
+    return hit && ed.contains(hit) ? hit : null;
+  }
+
+  function updateState() {
+    for (const b of bar.querySelectorAll('[aria-pressed]')) {
+      let on = false;
+      try {
+        on = document.queryCommandState(b.dataset.rt);
+      } catch (e) {
+        on = false;
+      }
+      b.setAttribute('aria-pressed', String(!!on));
+    }
+  }
+
+  async function link() {
+    saveRange();
+    const cur = closestIn('a');
+    const url = await promptBox('Link', 'Web address (https://…) or mailto:', cur ? cur.getAttribute('href') : 'https://');
+    restore();
+    if (url == null) return;
+    if (!url.trim()) {
+      exec('unlink');
+      return;
+    }
+    const href = safeUrl(/^[\w-]+(\.[\w-]+)+/.test(url.trim()) ? `https://${url.trim()}` : url.trim());
+    if (!href) return;
+    const s = window.getSelection();
+    if (s.isCollapsed) exec('insertHTML', `<a href="${esc(href)}">${esc(href)}</a>`);
+    else exec('createLink', href);
+  }
+
+  function checklist() {
+    if (!closestIn('li')) exec('insertUnorderedList');
+    const li = closestIn('li');
+    if (!li) return;
+    const first = li.firstChild;
+    if (first && first.nodeType === 1 && first.matches('input[type=checkbox]')) return;
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    li.insertBefore(document.createTextNode(' '), li.firstChild);
+    li.insertBefore(cb, li.firstChild);
+  }
+
+  function run(cmd) {
+    restore();
+    exec('styleWithCSS', false);
+    switch (cmd) {
+      case 'h1':
+      case 'h2':
+      case 'h3':
+      case 'p':
+        exec('formatBlock', `<${cmd}>`);
+        break;
+      case 'quote':
+        exec('formatBlock', '<blockquote>');
+        break;
+      case 'code':
+        exec('formatBlock', '<pre>');
+        break;
+      case 'ul':
+        exec('insertUnorderedList');
+        break;
+      case 'ol':
+        exec('insertOrderedList');
+        break;
+      case 'check':
+        checklist();
+        break;
+      case 'link':
+        link();
+        return;
+      case 'table':
+        exec('insertHTML', TABLE);
+        break;
+      case 'hr':
+        exec('insertHorizontalRule');
+        break;
+      case 'clear':
+        exec('removeFormat');
+        exec('unlink');
+        exec('formatBlock', '<p>');
+        break;
+      default:
+        exec(cmd);
+    }
+    updateState();
+    later();
+  }
+
+  bar.addEventListener('mousedown', (e) => {
+    if (e.target.closest('[data-rt]')) e.preventDefault();
+  });
+  bar.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-rt]');
+    if (b) run(b.dataset.rt);
+  });
+  ed.addEventListener('focus', () => {
+    try {
+      exec('defaultParagraphSeparator', 'p');
+    } catch (e) {
+      /* older browsers */
+    }
+  });
+  ed.addEventListener('input', later);
+  ed.addEventListener('blur', () => {
+    saveRange();
+    flush();
+  });
+  for (const ev of ['keyup', 'mouseup']) ed.addEventListener(ev, () => {
+    saveRange();
+    updateState();
+  });
+  ed.addEventListener('paste', (e) => {
+    if (!e.clipboardData) return;
+    e.preventDefault();
+    const h = pasteToHtml(e.clipboardData);
+    // a trailing block (table, list…) would leave the caret inside it
+    if (h) exec('insertHTML', /<\/(table|ul|ol|pre|blockquote)>$/.test(h) ? `${h}<p><br></p>` : h);
+    later();
+  });
+  ed.addEventListener('drop', (e) => {
+    // dropped content goes through the same sanitizer as paste
+    if (!e.dataTransfer || (e.dataTransfer.files && e.dataTransfer.files.length)) {
+      e.preventDefault();
+      return;
+    }
+    e.preventDefault();
+    const pos = document.caretRangeFromPoint ? document.caretRangeFromPoint(e.clientX, e.clientY) : null;
+    if (pos) {
+      const s = window.getSelection();
+      s.removeAllRanges();
+      s.addRange(pos);
+    }
+    const h = pasteToHtml(e.dataTransfer);
+    if (h) exec('insertHTML', h);
+    later();
+  });
+  ed.addEventListener('keydown', (e) => {
+    if (mod(e) && !e.altKey && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      link();
+    }
+  });
+  ed.addEventListener('click', (e) => {
+    const cb = e.target.closest('input[type=checkbox]');
+    if (cb) {
+      setTimeout(() => {
+        if (cb.checked) cb.setAttribute('checked', '');
+        else cb.removeAttribute('checked');
+        flush();
+      });
+      return;
+    }
+    const a = e.target.closest('a[href]');
+    if (a && (mod(e) || e.shiftKey)) {
+      e.preventDefault();
+      const href = safeUrl(a.getAttribute('href'));
+      if (href) window.open(href, '_blank', 'noopener,noreferrer');
+    }
+  });
+
+  return {
+    set(html, id) {
+      if (id === owner && document.activeElement === ed) return;
+      if (id !== owner) flush();
+      const clean = sanitizeHtml(html);
+      owner = id;
+      saved = clean;
+      if (ed.innerHTML !== clean) ed.innerHTML = clean;
+    },
+    flush,
+    focus: () => ed.focus(),
+  };
 }
-return { safeUrl, renderMarkdown };
+return { toolbarHTML, pasteToHtml, createRichText };
 })();
 
 // ---- ui/card/card.js
 const __ui_card_card = (() => {
 const { escapeHtml: esc } = __util_escape;
-const { renderMarkdown } = __util_markdown;
+const { sanitizeHtml } = __util_sanitize;
+const { safeUrl } = __util_markdown;
 const { STATUSES, PRIORITIES } = __model_plan;
 const { setTaskField, resolveRef, addLink, removeLink, setPredsFromText, predsText } = __model_edit;
+const { setFieldValue, findField, formatValue } = __model_fields;
 const { LINK_TYPES, LINK_LABELS } = __schedule_links;
 const { fmtStamp } = __ui_format;
 const { preserveFocus, on, deferWhileFocused } = __ui_dom;
-// Task card (side panel) with every task field, predecessors and custom fields.
+const { toolbarHTML, createRichText } = __ui_card_richtext;
+// Task details panel: large editable name, a compact fields strip (incl. custom
+// columns), the rich-text description, then links, notes, per-task custom
+// fields and timestamps. Resizable (left edge) and maximizable.
 
 
 
@@ -4466,32 +5981,115 @@ const { preserveFocus, on, deferWhileFocused } = __ui_dom;
 
 
 
+
+
+
+
+const MIN_W = 360;
 
 function createCard(app, root) {
   const render = deferWhileFocused(root, renderNow);
   const store = app.store;
-  let descEdit = false;
-  let lastId = null;
   const pinned = new Map();
   let pendingFocus = null;
+  let maximized = !!app.storage.prefs().cardMax;
   root.setAttribute('role', 'complementary');
-  root.setAttribute('aria-label', 'Task card');
+  root.setAttribute('aria-label', 'Task details');
+  root.innerHTML = `<div class="card-rs" role="separator" aria-orientation="vertical" aria-label="Resize task details (←/→)" tabindex="0" title="Drag to resize"></div>
+<div class="card-head"></div>
+<div class="card-body">
+<div class="cd-top"></div>
+<section class="card-sec cd-desc" aria-label="Description"><h3>Description</h3>
+<div class="rt rt-edit">${toolbarHTML()}<div class="rt-ed rt-doc" contenteditable="true" data-key="desc" role="textbox" aria-multiline="true" aria-label="Description" spellcheck="true" data-placeholder="Add a description… Paste from Word, Outlook, OneNote or a web page: headings, lists, tables and links are kept."></div></div>
+<div class="rt-view rt-doc" hidden></div>
+</section>
+<div class="cd-rest"></div>
+</div>`;
+  const head = root.querySelector('.card-head');
+  const top = root.querySelector('.cd-top');
+  const rest = root.querySelector('.cd-rest');
+  const rtEdit = root.querySelector('.rt-edit');
+  const rtView = root.querySelector('.rt-view');
+  const rich = createRichText(rtEdit, {
+    onChange: (html, id) => store.commit('Edit description', (plan) => {
+      const t = plan.rows.find((r) => r.id === id);
+      if (!t) return false;
+      return setTaskField(t, 'descHtml', html) || undefined;
+    }),
+  });
 
   const opt = (list, v) => list.map((s) => `<option${s === v ? ' selected' : ''}>${esc(s)}</option>`).join('');
 
-  function html(t) {
+  function customControl(f, t, dis) {
+    const v = t.values ? t.values[f.id] : undefined;
+    const a = `data-cf="${f.id}" data-key="cf-${f.id}" aria-label="${esc(f.name)}"${dis}`;
+    switch (f.type) {
+      case 'checkbox':
+        return `<input type="checkbox" ${a}${v ? ' checked' : ''}>`;
+      case 'select':
+        return `<select ${a}><option value=""></option>${f.options.map((o) => `<option${o === v ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+      case 'date':
+        return `<input type="date" ${a} value="${esc(v || '')}">`;
+      case 'number':
+        return `<input type="text" inputmode="decimal" class="num" ${a} value="${esc(formatValue(f, v))}">`;
+      case 'url': {
+        const href = v && safeUrl(v);
+        return `<span class="fs-url"><input type="url" ${a} value="${esc(v || '')}" placeholder="https://">${href ? `<a class="btn ic sm" href="${esc(href)}" target="_blank" rel="noopener noreferrer" aria-label="Open link" title="Open link">↗</a>` : ''}</span>`;
+      }
+      case 'person':
+        return `<input ${a} value="${esc(v || '')}" list="dl-owners">`;
+      default:
+        return `<input ${a} value="${esc(v || '')}">`;
+    }
+  }
+
+  function headHTML(t) {
+    const { tree } = store.d;
+    return `<span class="card-outline" title="Outline number · ID #${t.id}">${esc(tree.outline.get(t.id))}</span><span class="card-title">Task details</span>
+<button type="button" class="btn ic" data-act="prev" aria-label="Previous task" title="Previous task">↑</button>
+<button type="button" class="btn ic" data-act="next" aria-label="Next task" title="Next task">↓</button>
+<button type="button" class="btn ic" data-act="max" aria-pressed="${maximized}" aria-label="${maximized ? 'Restore panel size' : 'Maximize'}" title="${maximized ? 'Restore' : 'Maximize (full window)'}">${maximized ? '🗗' : '⤢'}</button>
+<button type="button" class="btn ic" data-act="close" aria-label="Close task details" title="Close (Esc)">×</button>`;
+  }
+
+  function topHTML(t) {
     const { tree } = store.d;
     const summary = tree.isSummary(t.id);
     const ro = store.readOnly;
     const dis = (cond) => (cond || ro ? ' disabled' : '');
     const owners = [...new Set(tree.tasks.map((x) => x.owner).filter(Boolean))].sort();
     const streams = [...new Set(tree.tasks.map((x) => x.workstream).filter(Boolean))].sort();
+    const fields = store.plan.fields || [];
+    const fs = (label, ctl, cls = '') => `<label class="fs${cls}"><span>${esc(label)}</span>${ctl}</label>`;
+    return `<textarea class="card-name" data-f="name" data-key="name" rows="1" aria-label="Task name" placeholder="Task name"${dis()}>${esc(t.name)}</textarea>
+${summary ? '<p class="hint">Summary task: dates, duration, progress and status roll up from its subtasks.</p>' : ''}
+<div class="fstrip">
+${fs('Start', `<input type="date" data-f="start" data-key="start" value="${t.start}"${dis(summary)}>`)}
+${fs('Finish', `<input type="date" data-f="finish" data-key="finish" value="${t.finish}"${dis(summary || t.milestone)}>`)}
+${fs('Duration', `<input type="number" min="0" step="1" data-f="duration" data-key="duration" value="${t.duration}" title="Working days"${dis(summary)}>`, ' w-xs')}
+${fs('Progress %', `<input type="number" min="0" max="100" step="5" data-f="progress" data-key="progress" value="${t.progress}"${dis(summary)}>`, ' w-xs')}
+${fs('Status', `<select data-f="status" data-key="status"${dis(summary)}>${opt(STATUSES, t.status)}</select>`)}
+${fs('Priority', `<select data-f="priority" data-key="priority"${dis()}>${opt(PRIORITIES, t.priority)}</select>`)}
+${fs('Owner', `<input data-f="owner" data-key="owner" value="${esc(t.owner)}" list="dl-owners"${dis()}>`)}
+${fs('Workstream', `<input data-f="workstream" data-key="workstream" value="${esc(t.workstream)}" list="dl-streams"${dis()}>`)}
+<label class="fs fs-chk"><span>Milestone</span><input type="checkbox" data-f="milestone" data-key="milestone"${t.milestone ? ' checked' : ''}${dis(summary)}></label>
+${fs('Tags', `<input data-f="tags" data-key="tags" value="${esc(t.tags.join(', '))}" placeholder="comma-separated"${dis()}>`, ' w-l')}
+${fields.map((f) => fs(f.name, customControl(f, t, dis()), ` fs-cf${f.type === 'checkbox' ? ' fs-chk' : ''}${f.type === 'url' || f.type === 'text' ? ' w-l' : ''}`)).join('')}
+</div>
+<datalist id="dl-owners">${owners.map((o) => `<option value="${esc(o)}">`).join('')}</datalist>
+<datalist id="dl-streams">${streams.map((o) => `<option value="${esc(o)}">`).join('')}</datalist>`;
+  }
+
+  function restHTML(t) {
+    const { tree } = store.d;
+    const ro = store.readOnly;
+    const dis = () => (ro ? ' disabled' : '');
     const succs = tree.tasks.filter((x) => x.preds.some((p) => p.id === t.id));
     const preds = t.preds
       .filter((p) => tree.byId.has(p.id))
       .map((p) => {
         const pt = tree.byId.get(p.id);
-        return `<tr data-pred="${p.id}"><td><input class="pr-ref" data-key="pr-ref-${p.id}" value="${esc(tree.outline.get(p.id))}" size="5" aria-label="Predecessor (outline number or #ID)"${dis()}> <span class="pr-name" title="${esc(pt.name)}">${esc(pt.name)}</span></td>
+        return `<tr data-pred="${p.id}"><td><input class="pr-ref" data-key="pr-ref-${p.id}" value="${esc(tree.outline.get(p.id))}" size="5" aria-label="Predecessor (outline number or #ID)"${dis()}> <button type="button" class="pr-name chip-link" data-open="${p.id}" title="Open ${esc(pt.name)}">${esc(pt.name)}</button></td>
 <td><select class="pr-type" data-key="pr-type-${p.id}" aria-label="Link type"${dis()}>${LINK_TYPES.map((x) => `<option value="${x}"${x === p.type ? ' selected' : ''} title="${LINK_LABELS[x]}">${x}</option>`).join('')}</select></td>
 <td><input class="pr-lag" type="number" step="1" data-key="pr-lag-${p.id}" value="${p.lag}" aria-label="Lag in working days (negative = lead)"${dis()}></td>
 <td>${ro ? '' : `<button type="button" class="btn ic" data-act="pr-del" aria-label="Remove link from ${esc(pt.name)}">×</button>`}</td></tr>`;
@@ -4500,66 +6098,58 @@ function createCard(app, root) {
     const custom = t.custom
       .map(
         (c, i) =>
-          `<div class="cf" data-i="${i}"><input class="cf-k" data-key="cf-k-${i}" value="${esc(c.key)}" placeholder="Field" aria-label="Custom field name"${dis()}><input class="cf-v" data-key="cf-v-${i}" value="${esc(c.value)}" placeholder="Value" aria-label="Custom field value"${dis()}>${ro ? '' : `<button type="button" class="btn ic" data-act="cf-del" aria-label="Remove field">×</button>`}</div>`
+          `<div class="cf" data-i="${i}"><input class="cf-k" data-key="cf-k-${i}" value="${esc(c.key)}" placeholder="Field" aria-label="Custom field name"${dis()}><input class="cf-v" data-key="cf-v-${i}" value="${esc(c.value)}" placeholder="Value" aria-label="Custom field value"${dis()}>${ro ? '' : `${c.key.trim() ? `<button type="button" class="btn sm" data-act="cf-promote" title="Make “${esc(c.key)}” a column for every task">Show as column</button>` : ''}<button type="button" class="btn ic" data-act="cf-del" aria-label="Remove field">×</button>`}</div>`
       )
       .join('');
-    const desc = descEdit && !ro
-      ? `<textarea data-f="desc" data-key="desc" rows="6" placeholder="Supports **bold**, *italic*, - bullet lists and [links](https://example.com)">${esc(t.desc)}</textarea>`
-      : `<div class="md">${t.desc ? renderMarkdown(t.desc) : '<p class="muted">No description.</p>'}</div>`;
-    return `<div class="card-head">
-<span class="card-outline" title="Outline number · ID #${t.id}">${esc(tree.outline.get(t.id))}</span>
-<input class="card-name" data-f="name" data-key="name" value="${esc(t.name)}" aria-label="Task name"${dis()}>
-<button type="button" class="btn ic" data-act="prev" aria-label="Previous task" title="Previous task">↑</button>
-<button type="button" class="btn ic" data-act="next" aria-label="Next task" title="Next task">↓</button>
-<button type="button" class="btn ic" data-act="close" aria-label="Close task card" title="Close (Esc)">×</button>
-</div>
-<div class="card-body">
-${summary ? '<p class="hint">Summary task: dates, duration and progress roll up from its subtasks.</p>' : ''}
-<div class="fgrid">
-<label class="fld">Start<input type="date" data-f="start" data-key="start" value="${t.start}"${dis(summary)}></label>
-<label class="fld">Finish<input type="date" data-f="finish" data-key="finish" value="${t.finish}"${dis(summary || t.milestone)}></label>
-<label class="fld">Duration (working days)<input type="number" min="0" step="1" data-f="duration" data-key="duration" value="${t.duration}"${dis(summary)}></label>
-<label class="fld">Progress %<input type="number" min="0" max="100" step="5" data-f="progress" data-key="progress" value="${t.progress}"${dis(summary)}></label>
-<label class="fld">Status<select data-f="status" data-key="status"${dis(summary)}>${opt(STATUSES, t.status)}</select></label>
-<label class="fld">Priority<select data-f="priority" data-key="priority"${dis()}>${opt(PRIORITIES, t.priority)}</select></label>
-<label class="fld">Owner<input data-f="owner" data-key="owner" value="${esc(t.owner)}" list="dl-owners"${dis()}></label>
-<label class="fld">Workstream<input data-f="workstream" data-key="workstream" value="${esc(t.workstream)}" list="dl-streams"${dis()}></label>
-<label class="fld span2">Tags (comma-separated)<input data-f="tags" data-key="tags" value="${esc(t.tags.join(', '))}"${dis()}></label>
-<label class="chk"><input type="checkbox" data-f="milestone" data-key="milestone"${t.milestone ? ' checked' : ''}${dis(summary)}> Milestone</label>
-</div>
-<datalist id="dl-owners">${owners.map((o) => `<option value="${esc(o)}">`).join('')}</datalist>
-<datalist id="dl-streams">${streams.map((o) => `<option value="${esc(o)}">`).join('')}</datalist>
-<section class="card-sec"><h3>Description ${ro ? '' : `<button type="button" class="btn sm" data-act="desc-toggle">${descEdit ? 'Preview' : 'Edit'}</button>`}</h3>${desc}</section>
+    return `<div class="cd-cols">
 <section class="card-sec"><h3>Predecessors</h3>
 ${preds ? `<table class="preds"><thead><tr><th>Task</th><th>Type</th><th>Lag</th><th><span class="sr-only">Remove</span></th></tr></thead><tbody>${preds}</tbody></table>` : '<p class="muted">None.</p>'}
 ${ro ? '' : `<div class="pr-add-row"><input class="pr-add" data-key="pr-add" placeholder="Add: 3, 1.2FS+2d, #7SS-1d" aria-label="Add predecessors"><button type="button" class="btn sm" data-act="pr-add">Add</button></div>`}
-<p class="hint">FS finish→start · SS start→start · FF finish→finish · SF start→finish. Lag in working days, negative = lead. Refer to tasks by outline number or #ID.</p>
-${succs.length ? `<p class="succ">Successors: ${succs.map((x) => `<button type="button" class="chip-link" data-open="${x.id}">${esc(tree.outline.get(x.id))} ${esc(x.name)}</button>`).join(' ')}</p>` : ''}
-</section>
+<p class="hint">FS finish→start · SS start→start · FF finish→finish · SF start→finish. Lag in working days, negative = lead.</p></section>
+<section class="card-sec"><h3>Successors</h3>${succs.length ? `<p class="succ">${succs.map((x) => `<button type="button" class="chip-link" data-open="${x.id}">${esc(tree.outline.get(x.id))} ${esc(x.name)}</button>`).join(' ')}</p>` : '<p class="muted">None.</p>'}</section>
+</div>
 <section class="card-sec"><h3>Notes</h3><textarea data-f="notes" data-key="notes" rows="3"${dis()}>${esc(t.notes)}</textarea></section>
-<section class="card-sec"><h3>Custom fields</h3>${custom || '<p class="muted">None.</p>'}${ro ? '' : '<button type="button" class="btn sm" data-act="cf-add">+ Add field</button>'}</section>
-<footer class="card-foot"><span class="stamp">ID #${t.id} · Created ${esc(fmtStamp(t.createdAt))} · Updated ${esc(fmtStamp(t.updatedAt))}</span>${ro ? '' : '<button type="button" class="btn danger sm" data-act="delete">Delete task</button>'}</footer>
-</div>`;
+<section class="card-sec"><h3>Custom fields <span class="muted h-note">(this task only — “Show as column” adds one to every task)</span></h3>${custom || '<p class="muted">None.</p>'}${ro ? '' : '<button type="button" class="btn sm" data-act="cf-add">+ Add field</button>'}</section>
+<footer class="card-foot"><span class="stamp">ID #${t.id} · Created ${esc(fmtStamp(t.createdAt))} · Updated ${esc(fmtStamp(t.updatedAt))}</span>${ro ? '' : '<button type="button" class="btn danger sm" data-act="delete">Delete task</button>'}</footer>`;
+  }
+
+  function applySize() {
+    root.classList.toggle('max', maximized);
+    const w = Number(app.storage.prefs().cardWidth) || 0;
+    root.style.width = !maximized && w ? `${clampW(w)}px` : '';
+  }
+  const clampW = (w) => Math.max(Math.min(window.innerWidth, Math.max(MIN_W, window.innerWidth * 0.5)), Math.min(window.innerWidth, w));
+
+  function fitName() {
+    const n = top.querySelector('.card-name');
+    if (!n) return;
+    n.style.height = 'auto';
+    n.style.height = `${n.scrollHeight}px`;
   }
 
   function renderNow() {
     const id = store.cardId;
     const t = id != null ? store.d.tree.byId.get(id) : null;
     if (!t || t.kind === 'section') {
+      if (!root.hidden) rich.flush();
       root.hidden = true;
       document.body.classList.remove('card-open');
-      lastId = null;
       return;
-    }
-    if (id !== lastId) {
-      descEdit = !t.desc;
-      lastId = id;
     }
     root.hidden = false;
     document.body.classList.add('card-open');
+    applySize();
     preserveFocus(root, () => {
-      root.innerHTML = html(t);
+      head.innerHTML = headHTML(t);
+      top.innerHTML = topHTML(t);
+      rest.innerHTML = restHTML(t);
     });
+    fitName();
+    const ro = store.readOnly;
+    rtEdit.hidden = ro;
+    rtView.hidden = !ro;
+    if (ro) rtView.innerHTML = sanitizeHtml(t.descHtml) || '<p class="muted">No description.</p>';
+    else rich.set(t.descHtml || '', t.id);
     if (pendingFocus) {
       const n = root.querySelector(`[data-key="${pendingFocus}"]`);
       if (n) n.focus();
@@ -4569,9 +6159,16 @@ ${succs.length ? `<p class="succ">Successors: ${succs.map((x) => `<button type="
 
   const commitTask = (label, fn) => store.commit(label, (plan) => fn(plan.rows.find((r) => r.id === store.cardId), plan));
 
+  on(root, 'input', '.card-name', fitName);
+  on(root, 'keydown', '.card-name', (e, el) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      el.blur();
+    }
+  });
   on(root, 'change', '[data-f]', (e, el) => {
     const f = el.dataset.f;
-    const v = el.type === 'checkbox' ? el.checked : el.value;
+    const v = el.type === 'checkbox' ? el.checked : f === 'name' ? el.value.replace(/\s*\n\s*/g, ' ') : el.value;
     const id = store.cardId;
     if (f === 'name' && !String(v).trim()) {
       app.toast('Task name cannot be empty.', 'error');
@@ -4585,6 +6182,14 @@ ${succs.length ? `<p class="succ">Successors: ${succs.map((x) => `<button type="
     }
     commitTask(`Edit ${f}`, (t) => setTaskField(t, f, v, pin) || undefined);
     return undefined;
+  });
+
+  on(root, 'change', '[data-cf]', (e, el) => {
+    const field = findField(store.plan, el.dataset.cf);
+    if (!field) return;
+    const v = el.type === 'checkbox' ? el.checked : el.value;
+    const ok = commitTask(`Edit ${field.name}`, (t) => setFieldValue(t, field, v) || undefined);
+    if (!ok) render();
   });
 
   on(root, 'change', '.pr-ref, .pr-type, .pr-lag', (e, el) => {
@@ -4639,25 +6244,31 @@ ${succs.length ? `<p class="succ">Successors: ${succs.map((x) => `<button type="
     }
   });
 
+  function step(dir) {
+    const tasks = store.d.visible.filter((r) => r.kind !== 'section');
+    const i = tasks.findIndex((r) => r.id === store.cardId);
+    const n = tasks[i + dir];
+    if (n) app.openCard(n.id, { focus: false });
+  }
+
   on(root, 'click', '[data-act], [data-open]', (e, el) => {
-    if (el.dataset.open) return app.openCard(Number(el.dataset.open));
+    if (el.dataset.open) return app.openCard(Number(el.dataset.open), { focus: false });
     const act = el.dataset.act;
     const id = store.cardId;
     switch (act) {
       case 'close':
         return app.closeCard();
       case 'prev':
-      case 'next': {
-        const tasks = store.d.visible.filter((r) => r.kind !== 'section');
-        const i = tasks.findIndex((r) => r.id === id);
-        const n = tasks[i + (act === 'next' ? 1 : -1)];
-        if (n) app.openCard(n.id, { focus: false });
+        return step(-1);
+      case 'next':
+        return step(1);
+      case 'max':
+        maximized = !maximized;
+        app.storage.setPrefs({ cardMax: maximized });
+        pendingFocus = null;
+        renderNow();
+        root.querySelector('[data-act="max"]').focus();
         return undefined;
-      }
-      case 'desc-toggle':
-        descEdit = !descEdit;
-        pendingFocus = descEdit ? 'desc' : null;
-        return render();
       case 'pr-del': {
         const pid = Number(el.closest('tr').dataset.pred);
         return commitTask('Remove link', (t, plan) => removeLink(plan.rows, pid, t.id));
@@ -4669,6 +6280,10 @@ ${succs.length ? `<p class="succ">Successors: ${succs.map((x) => `<button type="
         return commitTask('Add custom field', (t) => {
           t.custom.push({ key: '', value: '' });
         });
+      case 'cf-promote': {
+        const i = Number(el.closest('.cf').dataset.i);
+        return app.promoteCustomKey(store.d.tree.byId.get(id).custom[i].key);
+      }
       case 'cf-del': {
         const i = Number(el.closest('.cf').dataset.i);
         return commitTask('Remove custom field', (t) => {
@@ -4682,8 +6297,42 @@ ${succs.length ? `<p class="succ">Successors: ${succs.map((x) => `<button type="
     }
   });
 
+  // resize by dragging / arrow keys on the left edge
+  const rs = root.querySelector('.card-rs');
+  const setWidth = (w) => {
+    if (maximized) {
+      maximized = false;
+      app.storage.setPrefs({ cardMax: false });
+      renderNow();
+    }
+    const cw = Math.round(clampW(w));
+    root.style.width = `${cw}px`;
+    return cw;
+  };
+  rs.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    rs.setPointerCapture(e.pointerId);
+    let w = root.offsetWidth;
+    const onMove = (ev) => {
+      w = setWidth(window.innerWidth - ev.clientX);
+    };
+    const onUp = () => {
+      rs.removeEventListener('pointermove', onMove);
+      rs.removeEventListener('pointerup', onUp);
+      app.storage.setPrefs({ cardWidth: w });
+    };
+    rs.addEventListener('pointermove', onMove);
+    rs.addEventListener('pointerup', onUp);
+  });
+  rs.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    app.storage.setPrefs({ cardWidth: setWidth(root.offsetWidth + (e.key === 'ArrowLeft' ? 40 : -40)) });
+  });
+
   root.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
+    if (e.key === 'Escape' && !e.defaultPrevented) {
       e.preventDefault();
       e.stopPropagation();
       if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
@@ -4693,10 +6342,12 @@ ${succs.length ? `<p class="succ">Successors: ${succs.map((x) => `<button type="
 
   return {
     render,
+    flush: () => rich.flush(),
     focusName() {
       const n = root.querySelector('.card-name');
       if (n) n.focus();
     },
+    focusDesc: () => rich.focus(),
   };
 }
 return { createCard };
@@ -4711,7 +6362,9 @@ const { isOverdue, statusDay } = __model_stats;
 const { fmtDate, statusSlug } = __ui_format;
 const { parseISO, toYMD } = __schedule_calendar;
 const { preserveFocus } = __ui_dom;
+const { descText, firstLine } = __util_sanitize;
 // Board view: kanban columns by status; cards drag between columns.
+
 
 
 
@@ -4740,6 +6393,7 @@ function createBoard(app, root) {
 <div class="bc-top"><span class="bc-num">${esc(d.tree.outline.get(t.id))}</span>${sec ? `<span class="bc-sec">${esc(sec.name)}</span>` : ''}${t.priority === 'High' || t.priority === 'Critical' ? `<span class="prio pr-${t.priority.toLowerCase()}">${t.priority}</span>` : ''}</div>
 <div class="bc-name">${t.milestone ? '<span class="ms-ic">◆</span> ' : ''}${esc(t.name)}</div>
 ${parent ? `<div class="bc-parent">${esc(parent.name)}</div>` : ''}
+${firstLine(descText(t)) ? `<div class="bc-desc">${esc(firstLine(descText(t), 120))}</div>` : ''}
 <div class="bc-meta"><span>${esc(t.owner || 'Unassigned')}</span><span class="${od ? 'overdue-txt' : ''}">${od ? 'Overdue · ' : ''}${esc(fmtDate(t.finish, year))}</span></div>
 <div class="bc-prog" aria-hidden="true"><span style="width:${t.progress}%"></span></div></article>`;
         })
@@ -4964,13 +6618,27 @@ function closeMenu(refocus = true) {
   menu.remove();
   document.removeEventListener('pointerdown', outside, true);
   anchor.setAttribute('aria-expanded', 'false');
-  if (refocus && anchor.focus && document.contains(anchor)) anchor.focus({ preventScroll: true });
+  if (refocus && anchor.focus && (!(anchor instanceof Node) || document.contains(anchor))) anchor.focus({ preventScroll: true });
 }
 
 const isMenuOpen = () => !!current;
 
 /** items: [{ label | html, action, checked, radio, disabled, danger, hint, keepOpen } | { sep: true } | { heading }] */
-function openMenu(anchor, items, { label = 'Menu' } = {}) {
+// A context menu opens at a point: { x, y } stands in for an anchor element.
+function pointAnchor(a) {
+  if (!a || a.getBoundingClientRect) return a;
+  const prev = document.activeElement;
+  return {
+    dataset: {},
+    contains: () => false,
+    getBoundingClientRect: () => ({ left: a.x, right: a.x, top: a.y, bottom: a.y }),
+    setAttribute() {},
+    focus: (o) => prev && prev.focus && prev.focus(o),
+  };
+}
+
+function openMenu(anchorIn, items, { label = 'Menu' } = {}) {
+  const anchor = pointAnchor(anchorIn);
   if (anchor.dataset.justClosed) {
     delete anchor.dataset.justClosed;
     return;
@@ -5059,8 +6727,12 @@ const { MIN_YEAR, MAX_YEAR, fromYMD, toISO, parseISO, nextWorkday, prevWorkday, 
 const { parseLinkToken } = __schedule_links;
 const { computeTree, normalizeLevels } = __model_tree;
 const { createTask, createSection, STATUSES, PALETTE } = __model_plan;
+const { fieldKey, fieldIdOfKey, coerceValue } = __model_fields;
+const { markdownToHtml } = __util_markdown;
 // Paste import: parse TSV/CSV copied from spreadsheets / planning tools,
 // auto-detect columns and date order, and turn it into plan rows. Pure.
+
+
 
 
 
@@ -5077,6 +6749,7 @@ const IMPORT_FIELDS = [
   { key: 'level', label: 'Outline level' },
   { key: 'section', label: 'Section / Bucket' },
   { key: 'notes', label: 'Notes' },
+  { key: 'desc', label: 'Description' },
   { key: 'progress', label: 'Progress %' },
   { key: 'status', label: 'Status' },
 ];
@@ -5091,7 +6764,8 @@ const SYNONYMS = {
   preds: ['predecessors', 'predecessor', 'depends on', 'dependencies', 'dependency', 'preds'],
   level: ['outline level', 'level', 'outline', 'wbs', 'outline number', 'indent', 'hierarchy'],
   section: ['section', 'bucket', 'bucket name', 'phase', 'workstream', 'stream', 'group', 'category'],
-  notes: ['notes', 'note', 'description', 'comments', 'comment', 'details'],
+  notes: ['notes', 'note', 'comments', 'comment'],
+  desc: ['description', 'details', 'desc', 'task description'],
   progress: ['progress', '% complete', 'percent complete', '%', 'complete', '% done', 'pct complete'],
   status: ['status', 'state', 'progress status'],
 };
@@ -5150,11 +6824,21 @@ function parseDelimited(text, delim = detectDelimiter(text)) {
 
 const norm = (h) => String(h || '').trim().toLowerCase().replace(/[_*]+/g, ' ').replace(/\s+/g, ' ');
 
-/** Map header cells to fields. Returns { field: columnIndex }. */
-function detectColumns(headers) {
+/**
+ * Map header cells to fields. Returns { field: columnIndex }. Headers matching a
+ * plan custom column name map to its key (cf_<id>).
+ */
+function detectColumns(headers, fields = []) {
   const map = {};
   const used = new Set();
   const hs = headers.map(norm);
+  for (const f of fields) {
+    const idx = hs.findIndex((h, i) => !used.has(i) && h && h === norm(f.name));
+    if (idx >= 0) {
+      map[fieldKey(f)] = idx;
+      used.add(idx);
+    }
+  }
   // exact matches first, then prefix/contains matches
   for (const pass of [0, 1]) {
     for (const f of IMPORT_FIELDS) {
@@ -5271,7 +6955,11 @@ function importTable(plan, table, opts) {
   const order = opts.dateOrder === 'dmy' ? 'dmy' : 'mdy';
   const body = opts.hasHeader ? table.slice(1) : table.slice();
   const warnings = [];
-  const get = (r, k) => (mapping[k] != null && mapping[k] >= 0 ? String(r[mapping[k]] ?? '') : '');
+  // strip the formula-injection guard our CSV export adds ("'=x" → "=x")
+  const get = (r, k) => (mapping[k] != null && mapping[k] >= 0 ? String(r[mapping[k]] ?? '').replace(/^'(?=[=+\-@\t\r])/, '') : '');
+  const fieldCols = Object.keys(mapping)
+    .map((k) => ({ k, f: (plan.fields || []).find((x) => x.id === fieldIdOfKey(k)) }))
+    .filter((x) => x.f && mapping[x.k] != null && mapping[x.k] >= 0);
   const nameCol = mapping.name;
   const outlineMode = mapping.level != null && body.some((r) => /^\s*\d+\.\d/.test(String(r[mapping.level] || '')));
 
@@ -5342,11 +7030,20 @@ function importTable(plan, table, opts) {
       milestone,
       owner: get(r, 'owner').trim(),
       notes: get(r, 'notes').trim(),
+      descHtml: get(r, 'desc').trim() ? markdownToHtml(get(r, 'desc').trim()) : '',
       progress,
       status,
       workstream: section,
     });
     if (milestone) task.finish = task.start;
+    for (const { k, f } of fieldCols) {
+      let raw = get(r, k).trim();
+      if (!raw) continue;
+      if (f.type === 'date') raw = parseDate(raw, order) || raw;
+      const res = coerceValue(f, raw);
+      if (res.error) warnings.push(`Row ${i + 1}: ${res.error}`);
+      else if (res.value != null) task.values[f.id] = res.value;
+    }
     rows.push(task);
     taskNum++;
     rowNumToNew.set(String(taskNum), task.id);
@@ -5434,8 +7131,9 @@ async function openPasteImport(app, initialText = '') {
   });
 
   function renderMapping(dlg) {
+    const targets = [...IMPORT_FIELDS, ...(store.plan.fields || []).map((f) => ({ key: `cf_${f.id}`, label: `${f.name} (custom column)` }))];
     const fieldOpts = (i) =>
-      `<option value="">— ignore —</option>${IMPORT_FIELDS.map((f) => `<option value="${f.key}"${st.mapping[f.key] === i ? ' selected' : ''}>${esc(f.label)}</option>`).join('')}`;
+      `<option value="">— ignore —</option>${targets.map((f) => `<option value="${f.key}"${st.mapping[f.key] === i ? ' selected' : ''}>${esc(f.label)}</option>`).join('')}`;
     dlg.querySelector('.pi-map').innerHTML = st.headers
       .map((h, i) => `<label class="pi-col"><span class="pi-src" title="${esc(h)}">${esc(h || `Column ${i + 1}`)}</span><select data-col="${i}" aria-label="Map column ${esc(h || i + 1)}">${fieldOpts(i)}</select></label>`)
       .join('');
@@ -5458,7 +7156,7 @@ async function openPasteImport(app, initialText = '') {
     const sig = `${hasHeader}|${st.headers.join('\u0001')}`;
     if (sig !== st.sig) {
       st.sig = sig;
-      st.mapping = hasHeader ? detectColumns(st.headers) : { name: 0 };
+      st.mapping = hasHeader ? detectColumns(st.headers, store.plan.fields || []) : { name: 0 };
       renderMapping(dlg);
     }
     const rows = hasHeader ? st.table.slice(1) : st.table;
@@ -5728,10 +7426,12 @@ const { openMenu, openPalette, closeMenu, isMenuOpen } = __ui_dialogs_menu;
 const { openPasteImport } = __ui_dialogs_paste;
 const { exportGanttPNG } = __ui_gantt_export;
 const { buildPrint, clearPrint } = __ui_print;
-const { columnState } = __ui_grid_columns;
+const { columnState, columnLabel, columnOrder, moveColumn, moveColumnTo, setColumnVisible, resetColumns } = __ui_grid_columns;
+const { FIELD_TYPES, fieldKey, findField, addField, renameField, setFieldOptions, deleteField, customKeyUsage, promoteCustomKey, fieldByName, formatValue } = __model_fields;
 const { fmtDateLong, fmtStamp } = __ui_format;
 // App shell: layout, header, toolbar, menus, plan management, import/export,
 // global shortcuts. Views (grid, gantt, card, board, logs) live in their own modules.
+
 
 
 
@@ -5789,8 +7489,10 @@ function layoutHTML() {
   <button type="button" class="btn ic" data-act="help" aria-label="Keyboard shortcuts and help" title="Help (?)">?</button>
 </div>
 </header>
+<div class="hint-bar" role="note" hidden><span class="hint-text"><b>Tip:</b> Double-click a cell to edit · click ↗ or press Enter to open task details · Tab/Shift+Tab to nest · right-click a row or column header for more</span><button type="button" class="btn ic sm" data-act="hint-close" aria-label="Dismiss tip" title="Dismiss">×</button></div>
 <div class="banner" role="status" hidden><span class="banner-text"></span><button type="button" class="btn sm" data-act="use-file">Use file version</button><button type="button" class="btn ic sm" data-act="banner-close" aria-label="Dismiss" title="Dismiss">×</button></div>
 <div class="toolbar" role="toolbar" aria-label="Plan tools">
+  <div class="tb-group tb-open" hidden><button type="button" class="btn primary" data-act="open-details" title="Open the selected task's details (Enter)">↗ Open details</button></div>
   <div class="tb-group edit-only">
     <button type="button" class="btn" data-act="add-task" title="New task below (Insert or ${K}+Enter)">+ Task</button>
     <button type="button" class="btn plan-only" data-act="add-section" title="New section (Shift+Insert)">+ Section</button>
@@ -5907,6 +7609,9 @@ function boot(sourceHtml) {
     deleteRows: deleteRowsUI,
     moveSelection,
     addPlan,
+    rowMenu,
+    columnsMenu,
+    promoteCustomKey: promoteUI,
   };
 
   // ---- selection / card ---------------------------------------------------
@@ -6478,24 +8183,277 @@ function boot(sourceHtml) {
     ], { label: 'Baseline' });
   }
 
-  function columnsMenu(anchor) {
-    const cols = columnState(store.plan).filter((c) => !c.fixed);
-    openMenu(anchor, [
-      { heading: 'Show columns' },
-      ...cols.map((c) => ({
-        label: c.key === 'progress' ? 'Progress %' : c.key === 'duration' ? 'Duration' : c.label,
-        checked: c.visible,
+  // ---- columns: show/hide, order, custom columns ----------------------------
+  const COLS = { touch: false, schedule: false, allowReadOnly: true };
+  const colCommit = (label, fn) => store.commit(label, (p) => (fn(p) ? undefined : false), COLS);
+  const typeLabel = (t) => (FIELD_TYPES.find((x) => x.type === t) || { label: 'Text' }).label;
+
+  function columnsMenu(anchor, key) {
+    const p = store.plan;
+    const all = columnState(p);
+    const c = key ? all.find((x) => x.key === key) : null;
+    const ro = store.readOnly;
+    const items = [];
+    if (c) {
+      items.push({ heading: c.field ? `${c.label} · custom ${typeLabel(c.field.type).toLowerCase()}` : columnLabel(c) });
+      if (c.fixed) items.push({ label: 'Pinned: always first', disabled: true });
+      else {
+        items.push({ label: 'Move left', action: () => colCommit('Move column', (pl) => moveColumn(pl, c.key, -1)) });
+        items.push({ label: 'Move right', action: () => colCommit('Move column', (pl) => moveColumn(pl, c.key, 1)) });
+        items.push({ label: 'Hide column', action: () => colCommit('Hide column', (pl) => (setColumnVisible(pl, c.key, false), true)) });
+      }
+      if (c.field) {
+        items.push({ label: 'Filter by value…', action: () => fieldFilterMenu(anchor, c.field) });
+        items.push({ label: 'Rename…', disabled: ro, action: () => renameFieldUI(c.field) });
+        if (c.field.type === 'select') items.push({ label: 'Edit options…', disabled: ro, action: () => optionsUI(c.field) });
+        items.push({ label: 'Delete column…', danger: true, disabled: ro, action: () => deleteFieldUI(c.field) });
+      }
+      items.push({ sep: true });
+    }
+    items.push({ heading: 'Show columns' });
+    for (const x of all.filter((y) => !y.fixed)) {
+      items.push({
+        label: `${columnLabel(x)}${x.field ? ' (custom)' : ''}`,
+        checked: x.visible,
         keepOpen: true,
-        action: (on) => store.commit('Columns', (p) => {
-          const cs = (p.settings.columns = p.settings.columns || {});
-          cs[c.key] = { ...(cs[c.key] || {}), visible: on, explicit: true };
-        }, UI),
+        action: (on) => colCommit('Columns', (pl) => (setColumnVisible(pl, x.key, on), true)),
+      });
+    }
+    items.push({ sep: true });
+    items.push({ label: 'Add custom column…', disabled: ro, action: () => addFieldUI(c && !c.fixed ? c.key : null) });
+    const usage = customKeyUsage(p).filter((u) => !fieldByName(p, u.key));
+    if (usage.length) items.push({ label: 'Show a task custom field as column…', disabled: ro, action: () => promoteMenu(anchor, usage) });
+    items.push({ label: 'Manage columns & order…', action: manageColumnsUI });
+    items.push({ label: 'Reset columns, order & widths', action: () => colCommit('Reset columns', (pl) => (resetColumns(pl), true)) });
+    openMenu(anchor, items, { label: 'Columns' });
+  }
+
+  function promoteMenu(anchor, usage) {
+    openMenu(anchor, [
+      { heading: 'Per-task custom fields' },
+      ...usage.map((u) => ({ label: `${u.key} (${u.count} task${u.count === 1 ? '' : 's'})`, action: () => promoteUI(u.key) })),
+    ], { label: 'Show as column' });
+  }
+
+  function promoteUI(key) {
+    if (store.readOnly) return store.emit('readonly');
+    let res = null;
+    const ok = store.commit('Show as column', (p) => {
+      const r = promoteCustomKey(p, key);
+      if (r.error) return r.error;
+      res = r;
+      setColumnVisible(p, fieldKey(r.field), true);
+      return undefined;
+    }, { schedule: false });
+    if (ok && res) toast(`“${res.field.name}” is now a ${typeLabel(res.field.type).toLowerCase()} column (${res.moved} value${res.moved === 1 ? '' : 's'} moved${res.kept ? `; ${res.kept} that did not fit stay as task fields` : ''}).`);
+    return undefined;
+  }
+
+  function fieldFormHTML(f) {
+    const t = f ? f.type : 'text';
+    return `<label class="fld">Column name<input class="m-input cf-name" maxlength="80" value="${esc(f ? f.name : '')}" placeholder="e.g. Cost centre"></label>
+${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x) => `<option value="${x.type}"${x.type === t ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select></label>`}
+<label class="fld cf-opts-l"${t === 'select' ? '' : ' hidden'}>Options (one per line)<textarea class="cf-opts" rows="6" maxlength="5000">${esc(f ? f.options.join('\n') : '')}</textarea></label>
+<p class="warn cf-err" aria-live="polite"></p>`;
+  }
+
+  async function addFieldUI(afterKey) {
+    if (store.readOnly) return store.emit('readonly');
+    let made = null;
+    await modal({
+      title: 'Add custom column',
+      body: `${fieldFormHTML(null)}<p class="hint">Custom columns belong to the plan: every task gets a value, editable in the grid and in task details.</p>`,
+      actions: [{ label: 'Cancel', value: 'cancel' }, { label: 'Add column', value: 'ok', primary: true }],
+      onMount: (dlg) => {
+        const sel = dlg.querySelector('.cf-type');
+        sel.addEventListener('change', () => (dlg.querySelector('.cf-opts-l').hidden = sel.value !== 'select'));
+      },
+      onAction: (v, dlg) => {
+        const name = dlg.querySelector('.cf-name').value;
+        const type = dlg.querySelector('.cf-type').value;
+        const options = dlg.querySelector('.cf-opts').value.split('\n');
+        let err = null;
+        store.commit('Add column', (p) => {
+          const r = addField(p, { name, type, options });
+          if (r.error) {
+            err = r.error;
+            return false;
+          }
+          made = r.field;
+          if (afterKey) {
+            const ord = columnOrder(p);
+            const i = ord.indexOf(afterKey);
+            if (i >= 0) moveColumnTo(p, fieldKey(r.field), ord[i + 1] ?? null);
+          }
+          return undefined;
+        }, { schedule: false });
+        if (err) {
+          dlg.querySelector('.cf-err').textContent = err;
+          return false;
+        }
+        return true;
+      },
+    });
+    if (made) toast(`Added column “${made.name}”. Double-click a cell to fill it in.`);
+    return made;
+  }
+
+  async function renameFieldUI(f) {
+    const name = await promptBox('Rename column', 'Column name', f.name);
+    if (name == null) return;
+    store.commit('Rename column', (p) => renameField(p, f.id, name) || undefined, { schedule: false });
+  }
+
+  async function optionsUI(f) {
+    await modal({
+      title: `Options for “${f.name}”`,
+      body: `<label class="fld">Options (one per line)<textarea class="cf-opts" rows="8" maxlength="5000">${esc(f.options.join('\n'))}</textarea></label><p class="hint">Tasks using an option you remove lose that value (Undo restores it).</p><p class="warn cf-err" aria-live="polite"></p>`,
+      actions: [{ label: 'Cancel', value: 'cancel' }, { label: 'Save options', value: 'ok', primary: true }],
+      onAction: (v, dlg) => {
+        let err = null;
+        store.commit('Edit options', (p) => {
+          err = setFieldOptions(p, f.id, dlg.querySelector('.cf-opts').value.split('\n'));
+          return err ? false : undefined;
+        }, { schedule: false });
+        if (err) {
+          dlg.querySelector('.cf-err').textContent = err;
+          return false;
+        }
+        return true;
+      },
+    });
+  }
+
+  async function deleteFieldUI(f) {
+    const n = store.plan.rows.filter((r) => r.values && r.values[f.id] != null).length;
+    const ok = await confirmBox(`Delete the column “${f.name}”?${n ? ` Its value on ${n} task${n === 1 ? '' : 's'} will be removed.` : ''} You can undo this (${K}+Z).`, { ok: 'Delete column', danger: true, title: 'Delete column' });
+    if (!ok) return;
+    if (store.commit('Delete column', (p) => (deleteField(p, f.id) ? undefined : false), { schedule: false })) toast(`Deleted column “${f.name}”. Undo (${K}+Z) brings it back with its values.`);
+  }
+
+  function fieldFilterMenu(anchor, f) {
+    const vals = new Map();
+    for (const t of store.d.tree.tasks) {
+      const s = formatValue(f, t.values ? t.values[f.id] : undefined);
+      vals.set(s, (vals.get(s) || 0) + 1);
+    }
+    const cur = store.filter.field;
+    const list = f.type === 'select' ? ['', ...f.options] : f.type === 'checkbox' ? ['Yes', ''] : [...vals.keys()].sort().slice(0, 40);
+    openMenu(anchor, [
+      { heading: `Filter: ${f.name}` },
+      ...list.map((v) => ({
+        label: `${v || '(empty)'} (${vals.get(v) || 0})`,
+        radio: true,
+        checked: !!cur && cur.id === f.id && cur.value === v,
+        action: () => setFilter('field', { id: f.id, value: v }),
       })),
       { sep: true },
-      { label: 'Reset columns & widths', action: () => store.commit('Reset columns', (p) => {
-        p.settings.columns = null;
-      }, UI) },
-    ], { label: 'Columns' });
+      { label: 'Clear column filter', disabled: !cur, action: () => setFilter('field', null) },
+    ], { label: `Filter by ${f.name}` });
+  }
+
+  function manageColumnsUI() {
+    const listHTML = () => {
+      const p = store.plan;
+      const all = columnState(p);
+      const ord = columnOrder(p);
+      const ro = store.readOnly;
+      return `<ol class="mc-list">${all.map((c) => {
+        const i = ord.indexOf(c.key);
+        const lbl = esc(columnLabel(c));
+        return `<li class="mc-row${c.visible ? '' : ' off'}"><label class="chk"><input type="checkbox" data-mc="vis" data-k="${c.key}"${c.visible ? ' checked' : ''}${c.fixed ? ' disabled' : ''}> <span class="mc-name">${lbl}</span></label><span class="mc-type muted">${c.fixed ? 'pinned' : c.field ? `custom · ${esc(typeLabel(c.field.type).toLowerCase())}` : 'built-in'}</span>
+<span class="mc-acts">${c.fixed ? '' : `<button type="button" class="btn ic sm" data-mc="left" data-k="${c.key}" aria-label="Move ${lbl} left (up)"${i <= 0 ? ' disabled' : ''}>↑</button><button type="button" class="btn ic sm" data-mc="right" data-k="${c.key}" aria-label="Move ${lbl} right (down)"${i >= ord.length - 1 ? ' disabled' : ''}>↓</button>`}${c.field && !ro ? `<button type="button" class="btn sm" data-mc="rename" data-k="${c.key}">Rename</button>${c.field.type === 'select' ? `<button type="button" class="btn sm" data-mc="opts" data-k="${c.key}">Options</button>` : ''}<button type="button" class="btn sm danger" data-mc="del" data-k="${c.key}" aria-label="Delete column ${lbl}">Delete</button>` : ''}</span></li>`;
+      }).join('')}</ol>${store.readOnly ? '' : '<button type="button" class="btn sm" data-mc="add">+ Add custom column</button>'}`;
+    };
+    modal({
+      title: 'Columns',
+      wide: true,
+      body: `<p class="hint">Order is left → right (top = left). Task name stays first. Order, visibility and widths are saved in the plan file.</p><div class="mc-wrap">${listHTML()}</div>`,
+      actions: [{ label: 'Reset to default', value: 'reset' }, { label: 'Done', value: 'cancel', primary: true }],
+      onAction: (v, dlg) => {
+        if (v === 'reset') {
+          colCommit('Reset columns', (pl) => (resetColumns(pl), true));
+          dlg.querySelector('.mc-wrap').innerHTML = listHTML();
+          return false;
+        }
+        return true;
+      },
+      onMount: (dlg) => {
+        const wrap = dlg.querySelector('.mc-wrap');
+        const refresh = (focusSel) => {
+          wrap.innerHTML = listHTML();
+          const n = focusSel && wrap.querySelector(focusSel);
+          if (n && !n.disabled) n.focus();
+          else if (focusSel) (wrap.querySelector(focusSel.replace(/data-mc="\w+"/, 'data-mc="vis"')) || wrap).focus?.();
+        };
+        wrap.addEventListener('change', (e) => {
+          const el = e.target.closest('[data-mc="vis"]');
+          if (!el) return;
+          colCommit('Columns', (pl) => (setColumnVisible(pl, el.dataset.k, el.checked), true));
+          refresh(`[data-mc="vis"][data-k="${el.dataset.k}"]`);
+        });
+        wrap.addEventListener('click', async (e) => {
+          const b = e.target.closest('button[data-mc]');
+          if (!b) return;
+          const k = b.dataset.k;
+          const f = k ? findField(store.plan, k.replace(/^cf_/, '')) : null;
+          const mc = b.dataset.mc;
+          if (mc === 'left' || mc === 'right') {
+            const ord = columnOrder(store.plan);
+            const i = ord.indexOf(k);
+            colCommit('Move column', (pl) => moveColumnTo(pl, k, mc === 'left' ? ord[i - 1] : ord[i + 2] ?? null));
+          } else if (mc === 'rename' && f) await renameFieldUI(f);
+          else if (mc === 'opts' && f) await optionsUI(f);
+          else if (mc === 'del' && f) await deleteFieldUI(f);
+          else if (mc === 'add') await addFieldUI(null);
+          refresh(`[data-mc="${mc}"]${k ? `[data-k="${k}"]` : ''}`);
+        });
+      },
+    });
+  }
+
+  // ---- row context menu --------------------------------------------------------
+  function addSubtask(id) {
+    if (store.readOnly) return store.emit('readonly');
+    let nid = null;
+    store.commit('Add subtask', (p) => {
+      const idx = p.rows.findIndex((r) => r.id === id);
+      const t = p.rows[idx];
+      if (!t || !isTask(t)) return false;
+      let end = idx + 1;
+      while (end < p.rows.length && isTask(p.rows[end]) && p.rows[end].level > t.level) end++;
+      const nt = createTask(p, { name: 'New subtask', start: t.start, duration: 1, level: t.level + 1 });
+      p.rows.splice(end, 0, nt);
+      t.collapsed = false;
+      nid = nt.id;
+      return undefined;
+    });
+    return afterInsert(nid);
+  }
+
+  function rowMenu(id, at) {
+    const r = store.d.tree.byId.get(id);
+    if (!r) return;
+    if (!isTask(r)) {
+      sectionMenu(id, at);
+      return;
+    }
+    const ro = store.readOnly;
+    const n = store.selection.size;
+    openMenu(at, [
+      { label: 'Open details', hint: 'Enter', action: () => openCard(id) },
+      { label: 'Edit name', hint: 'F2', disabled: ro, action: () => {
+        select(id, { col: 'name' });
+        app.grid.startEdit(id, 'name');
+      } },
+      { label: 'Add subtask', disabled: ro, action: () => addSubtask(id) },
+      { label: 'Add task below', hint: 'Insert', disabled: ro, action: addTask },
+      { sep: true },
+      { label: 'Indent', hint: 'Tab', disabled: ro, action: app.indent },
+      { label: 'Outdent', hint: 'Shift+Tab', disabled: ro, action: app.outdent },
+      { sep: true },
+      { label: n > 1 ? `Delete ${n} rows` : 'Delete', hint: 'Del', danger: true, disabled: ro, action: app.deleteSelection },
+    ], { label: `Task ${r.name}` });
   }
 
   function conflictsMenu(anchor) {
@@ -6538,7 +8496,7 @@ function boot(sourceHtml) {
     store.ui(true);
   }
   function clearFilters() {
-    store.filter = { text: '', owner: '', status: '', section: '', overdue: false };
+    store.filter = { text: '', owner: '', status: '', section: '', overdue: false, field: null };
     search.value = '';
     store.ui(true);
   }
@@ -6564,8 +8522,10 @@ function boot(sourceHtml) {
   function showHelp() {
     const rows = [
       ['↑ ↓ ← →', 'Move between cells (Shift+↑/↓ extends the selection)'],
-      ['Enter / F2', 'Edit the cell. Enter on the # column opens the task card'],
-      ['Shift+Enter', 'Open the task card'],
+      ['Double-click', 'Edit a cell (read-only cells open the task details)'],
+      ['↗ / Enter', 'Open task details from the task name (Enter on other cells edits them; Shift+Enter always opens)'],
+      ['F2', 'Edit the selected cell'],
+      ['Right-click', 'Row: open details, edit name, add subtask, indent, outdent, delete. Column header: move, hide, add / rename / delete custom columns'],
       ['Type any key', 'Start editing the cell'],
       ['Esc', 'Cancel editing / close the card. Press again to let Tab leave the grid'],
       ['Tab / Shift+Tab', 'Indent / outdent the selected tasks'],
@@ -6577,10 +8537,12 @@ function boot(sourceHtml) {
       [`${K}+F`, 'Search'],
       [`${K}+S`, 'Save the plan into this .html file (Edge / Chrome write it in place; other browsers download an updated copy)'],
       [`Shift+${K}+S`, 'Save as: write to a new file'],
-      ['Gantt', 'Drag a bar to move it, drag its right edge to change the finish. Drag the small circle at a bar’s start or finish onto another bar to link them (drop on the left half → successor start, right half → successor finish). Click an arrow to edit or delete it; double-click a bar to open the card.'],
+      ['Gantt', 'Drag a bar to move it, drag its right edge to change the finish. Drag the small circle at a bar’s start or finish onto another bar to link them (drop on the left half → successor start, right half → successor finish). Click an arrow to edit or delete it; click a bar (without dragging) to open its details.'],
+      ['Description', `Rich text: paste from Word, Outlook, OneNote or a web page keeps headings, lists, tables and links (scripts, images and styles are removed). ${K}+B/I/U, ${K}+K for a link.`],
       ['Predecessors', 'Type outline numbers or #IDs with optional type and lag: 3, 1.2FS+2d, #7SS-1d, 4FF+1d, 5SF'],
       ['Board', 'Drag cards between columns; Shift+←/→ moves the focused card'],
       ['Grid rows', 'Drag the # cell to reorder; drop on the middle of a task to make it a subtask'],
+      ['Columns', 'Drag a column header to reorder it. Columns ▾ → Manage columns for keyboard reordering, custom columns and visibility'],
     ];
     modal({
       title: 'Keyboard shortcuts & tips',
@@ -6595,6 +8557,15 @@ function boot(sourceHtml) {
     'use-file': useFileVersion,
     save: () => saveToFile(false),
     'banner-close': hideBanner,
+    'hint-close': () => {
+      storage.setPrefs({ hintDismissed: true });
+      q('.hint-bar').hidden = true;
+      app.grid.focus();
+    },
+    'open-details': () => {
+      const id = store.active && store.active.id;
+      if (id != null) openCard(id);
+    },
     'add-task': addTask,
     'add-section': () => addSection(),
     indent: app.indent,
@@ -6627,7 +8598,7 @@ function boot(sourceHtml) {
     unlock,
     help: showHelp,
   };
-  for (const scope of [q('.top'), q('.banner'), q('.toolbar')]) {
+  for (const scope of [q('.top'), q('.banner'), q('.hint-bar'), q('.toolbar')]) {
     scope.addEventListener('click', (e) => {
       const b = e.target.closest('[data-act]');
       if (b && scope.contains(b) && ACTS[b.dataset.act]) ACTS[b.dataset.act](b, e);
@@ -6763,6 +8734,9 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
     pressed('critical', s.showCritical);
     pressed('f-overdue', store.filter.overdue);
     pressed('present', store.presenter);
+    const act = store.active && store.selection.size === 1 ? store.d.tree.byId.get(store.active.id) : null;
+    q('.tb-open').hidden = !act || !isTask(act) || store.cardId === act.id;
+    q('.hint-bar').hidden = !!storage.prefs().hintDismissed || store.readOnly || store.presenter;
     q('[data-act="undo"]').disabled = !store.undoStack.length;
     q('[data-act="redo"]').disabled = !store.redoStack.length;
     q('[data-act="theme"]').textContent = `Theme: ${theme[0].toUpperCase()}${theme.slice(1)}`;
@@ -6774,6 +8748,8 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
     fillSelect(q('[data-filter="section"]'), store.plan.rows.filter((r) => !isTask(r)).map((r) => [String(r.id), r.name]), 'All sections');
     if (document.activeElement !== search) search.value = store.filter.text;
     q('.filters').classList.toggle('active', !!store.d.matches);
+    const ff = store.filter.field && findField(store.plan, store.filter.field.id);
+    q('[data-act="f-clear"]').title = ff ? `Clear filters (column filter: ${ff.name} = ${store.filter.field.value || 'empty'})` : 'Clear filters';
     for (const v of VIEWS) q(`[data-act="view-${v}"]`).setAttribute('aria-selected', String(store.view === v));
   }
 

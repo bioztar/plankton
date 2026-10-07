@@ -26,7 +26,8 @@ import { openMenu, openPalette, closeMenu, isMenuOpen } from './dialogs/menu.js'
 import { openPasteImport } from './dialogs/paste.js';
 import { exportGanttPNG } from './gantt/export.js';
 import { buildPrint, clearPrint } from './print.js';
-import { columnState } from './grid/columns.js';
+import { columnState, columnLabel, columnOrder, moveColumn, moveColumnTo, setColumnVisible, resetColumns } from './grid/columns.js';
+import { FIELD_TYPES, fieldKey, findField, addField, renameField, setFieldOptions, deleteField, customKeyUsage, promoteCustomKey, fieldByName, formatValue } from '../model/fields.js';
 import { fmtDateLong, fmtStamp } from './format.js';
 
 const VIEWS = ['plan', 'board', 'logs'];
@@ -57,8 +58,10 @@ function layoutHTML() {
   <button type="button" class="btn ic" data-act="help" aria-label="Keyboard shortcuts and help" title="Help (?)">?</button>
 </div>
 </header>
+<div class="hint-bar" role="note" hidden><span class="hint-text"><b>Tip:</b> Double-click a cell to edit · click ↗ or press Enter to open task details · Tab/Shift+Tab to nest · right-click a row or column header for more</span><button type="button" class="btn ic sm" data-act="hint-close" aria-label="Dismiss tip" title="Dismiss">×</button></div>
 <div class="banner" role="status" hidden><span class="banner-text"></span><button type="button" class="btn sm" data-act="use-file">Use file version</button><button type="button" class="btn ic sm" data-act="banner-close" aria-label="Dismiss" title="Dismiss">×</button></div>
 <div class="toolbar" role="toolbar" aria-label="Plan tools">
+  <div class="tb-group tb-open" hidden><button type="button" class="btn primary" data-act="open-details" title="Open the selected task's details (Enter)">↗ Open details</button></div>
   <div class="tb-group edit-only">
     <button type="button" class="btn" data-act="add-task" title="New task below (Insert or ${K}+Enter)">+ Task</button>
     <button type="button" class="btn plan-only" data-act="add-section" title="New section (Shift+Insert)">+ Section</button>
@@ -175,6 +178,9 @@ export function boot(sourceHtml) {
     deleteRows: deleteRowsUI,
     moveSelection,
     addPlan,
+    rowMenu,
+    columnsMenu,
+    promoteCustomKey: promoteUI,
   };
 
   // ---- selection / card ---------------------------------------------------
@@ -746,24 +752,277 @@ export function boot(sourceHtml) {
     ], { label: 'Baseline' });
   }
 
-  function columnsMenu(anchor) {
-    const cols = columnState(store.plan).filter((c) => !c.fixed);
-    openMenu(anchor, [
-      { heading: 'Show columns' },
-      ...cols.map((c) => ({
-        label: c.key === 'progress' ? 'Progress %' : c.key === 'duration' ? 'Duration' : c.label,
-        checked: c.visible,
+  // ---- columns: show/hide, order, custom columns ----------------------------
+  const COLS = { touch: false, schedule: false, allowReadOnly: true };
+  const colCommit = (label, fn) => store.commit(label, (p) => (fn(p) ? undefined : false), COLS);
+  const typeLabel = (t) => (FIELD_TYPES.find((x) => x.type === t) || { label: 'Text' }).label;
+
+  function columnsMenu(anchor, key) {
+    const p = store.plan;
+    const all = columnState(p);
+    const c = key ? all.find((x) => x.key === key) : null;
+    const ro = store.readOnly;
+    const items = [];
+    if (c) {
+      items.push({ heading: c.field ? `${c.label} · custom ${typeLabel(c.field.type).toLowerCase()}` : columnLabel(c) });
+      if (c.fixed) items.push({ label: 'Pinned: always first', disabled: true });
+      else {
+        items.push({ label: 'Move left', action: () => colCommit('Move column', (pl) => moveColumn(pl, c.key, -1)) });
+        items.push({ label: 'Move right', action: () => colCommit('Move column', (pl) => moveColumn(pl, c.key, 1)) });
+        items.push({ label: 'Hide column', action: () => colCommit('Hide column', (pl) => (setColumnVisible(pl, c.key, false), true)) });
+      }
+      if (c.field) {
+        items.push({ label: 'Filter by value…', action: () => fieldFilterMenu(anchor, c.field) });
+        items.push({ label: 'Rename…', disabled: ro, action: () => renameFieldUI(c.field) });
+        if (c.field.type === 'select') items.push({ label: 'Edit options…', disabled: ro, action: () => optionsUI(c.field) });
+        items.push({ label: 'Delete column…', danger: true, disabled: ro, action: () => deleteFieldUI(c.field) });
+      }
+      items.push({ sep: true });
+    }
+    items.push({ heading: 'Show columns' });
+    for (const x of all.filter((y) => !y.fixed)) {
+      items.push({
+        label: `${columnLabel(x)}${x.field ? ' (custom)' : ''}`,
+        checked: x.visible,
         keepOpen: true,
-        action: (on) => store.commit('Columns', (p) => {
-          const cs = (p.settings.columns = p.settings.columns || {});
-          cs[c.key] = { ...(cs[c.key] || {}), visible: on, explicit: true };
-        }, UI),
+        action: (on) => colCommit('Columns', (pl) => (setColumnVisible(pl, x.key, on), true)),
+      });
+    }
+    items.push({ sep: true });
+    items.push({ label: 'Add custom column…', disabled: ro, action: () => addFieldUI(c && !c.fixed ? c.key : null) });
+    const usage = customKeyUsage(p).filter((u) => !fieldByName(p, u.key));
+    if (usage.length) items.push({ label: 'Show a task custom field as column…', disabled: ro, action: () => promoteMenu(anchor, usage) });
+    items.push({ label: 'Manage columns & order…', action: manageColumnsUI });
+    items.push({ label: 'Reset columns, order & widths', action: () => colCommit('Reset columns', (pl) => (resetColumns(pl), true)) });
+    openMenu(anchor, items, { label: 'Columns' });
+  }
+
+  function promoteMenu(anchor, usage) {
+    openMenu(anchor, [
+      { heading: 'Per-task custom fields' },
+      ...usage.map((u) => ({ label: `${u.key} (${u.count} task${u.count === 1 ? '' : 's'})`, action: () => promoteUI(u.key) })),
+    ], { label: 'Show as column' });
+  }
+
+  function promoteUI(key) {
+    if (store.readOnly) return store.emit('readonly');
+    let res = null;
+    const ok = store.commit('Show as column', (p) => {
+      const r = promoteCustomKey(p, key);
+      if (r.error) return r.error;
+      res = r;
+      setColumnVisible(p, fieldKey(r.field), true);
+      return undefined;
+    }, { schedule: false });
+    if (ok && res) toast(`“${res.field.name}” is now a ${typeLabel(res.field.type).toLowerCase()} column (${res.moved} value${res.moved === 1 ? '' : 's'} moved${res.kept ? `; ${res.kept} that did not fit stay as task fields` : ''}).`);
+    return undefined;
+  }
+
+  function fieldFormHTML(f) {
+    const t = f ? f.type : 'text';
+    return `<label class="fld">Column name<input class="m-input cf-name" maxlength="80" value="${esc(f ? f.name : '')}" placeholder="e.g. Cost centre"></label>
+${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x) => `<option value="${x.type}"${x.type === t ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select></label>`}
+<label class="fld cf-opts-l"${t === 'select' ? '' : ' hidden'}>Options (one per line)<textarea class="cf-opts" rows="6" maxlength="5000">${esc(f ? f.options.join('\n') : '')}</textarea></label>
+<p class="warn cf-err" aria-live="polite"></p>`;
+  }
+
+  async function addFieldUI(afterKey) {
+    if (store.readOnly) return store.emit('readonly');
+    let made = null;
+    await modal({
+      title: 'Add custom column',
+      body: `${fieldFormHTML(null)}<p class="hint">Custom columns belong to the plan: every task gets a value, editable in the grid and in task details.</p>`,
+      actions: [{ label: 'Cancel', value: 'cancel' }, { label: 'Add column', value: 'ok', primary: true }],
+      onMount: (dlg) => {
+        const sel = dlg.querySelector('.cf-type');
+        sel.addEventListener('change', () => (dlg.querySelector('.cf-opts-l').hidden = sel.value !== 'select'));
+      },
+      onAction: (v, dlg) => {
+        const name = dlg.querySelector('.cf-name').value;
+        const type = dlg.querySelector('.cf-type').value;
+        const options = dlg.querySelector('.cf-opts').value.split('\n');
+        let err = null;
+        store.commit('Add column', (p) => {
+          const r = addField(p, { name, type, options });
+          if (r.error) {
+            err = r.error;
+            return false;
+          }
+          made = r.field;
+          if (afterKey) {
+            const ord = columnOrder(p);
+            const i = ord.indexOf(afterKey);
+            if (i >= 0) moveColumnTo(p, fieldKey(r.field), ord[i + 1] ?? null);
+          }
+          return undefined;
+        }, { schedule: false });
+        if (err) {
+          dlg.querySelector('.cf-err').textContent = err;
+          return false;
+        }
+        return true;
+      },
+    });
+    if (made) toast(`Added column “${made.name}”. Double-click a cell to fill it in.`);
+    return made;
+  }
+
+  async function renameFieldUI(f) {
+    const name = await promptBox('Rename column', 'Column name', f.name);
+    if (name == null) return;
+    store.commit('Rename column', (p) => renameField(p, f.id, name) || undefined, { schedule: false });
+  }
+
+  async function optionsUI(f) {
+    await modal({
+      title: `Options for “${f.name}”`,
+      body: `<label class="fld">Options (one per line)<textarea class="cf-opts" rows="8" maxlength="5000">${esc(f.options.join('\n'))}</textarea></label><p class="hint">Tasks using an option you remove lose that value (Undo restores it).</p><p class="warn cf-err" aria-live="polite"></p>`,
+      actions: [{ label: 'Cancel', value: 'cancel' }, { label: 'Save options', value: 'ok', primary: true }],
+      onAction: (v, dlg) => {
+        let err = null;
+        store.commit('Edit options', (p) => {
+          err = setFieldOptions(p, f.id, dlg.querySelector('.cf-opts').value.split('\n'));
+          return err ? false : undefined;
+        }, { schedule: false });
+        if (err) {
+          dlg.querySelector('.cf-err').textContent = err;
+          return false;
+        }
+        return true;
+      },
+    });
+  }
+
+  async function deleteFieldUI(f) {
+    const n = store.plan.rows.filter((r) => r.values && r.values[f.id] != null).length;
+    const ok = await confirmBox(`Delete the column “${f.name}”?${n ? ` Its value on ${n} task${n === 1 ? '' : 's'} will be removed.` : ''} You can undo this (${K}+Z).`, { ok: 'Delete column', danger: true, title: 'Delete column' });
+    if (!ok) return;
+    if (store.commit('Delete column', (p) => (deleteField(p, f.id) ? undefined : false), { schedule: false })) toast(`Deleted column “${f.name}”. Undo (${K}+Z) brings it back with its values.`);
+  }
+
+  function fieldFilterMenu(anchor, f) {
+    const vals = new Map();
+    for (const t of store.d.tree.tasks) {
+      const s = formatValue(f, t.values ? t.values[f.id] : undefined);
+      vals.set(s, (vals.get(s) || 0) + 1);
+    }
+    const cur = store.filter.field;
+    const list = f.type === 'select' ? ['', ...f.options] : f.type === 'checkbox' ? ['Yes', ''] : [...vals.keys()].sort().slice(0, 40);
+    openMenu(anchor, [
+      { heading: `Filter: ${f.name}` },
+      ...list.map((v) => ({
+        label: `${v || '(empty)'} (${vals.get(v) || 0})`,
+        radio: true,
+        checked: !!cur && cur.id === f.id && cur.value === v,
+        action: () => setFilter('field', { id: f.id, value: v }),
       })),
       { sep: true },
-      { label: 'Reset columns & widths', action: () => store.commit('Reset columns', (p) => {
-        p.settings.columns = null;
-      }, UI) },
-    ], { label: 'Columns' });
+      { label: 'Clear column filter', disabled: !cur, action: () => setFilter('field', null) },
+    ], { label: `Filter by ${f.name}` });
+  }
+
+  function manageColumnsUI() {
+    const listHTML = () => {
+      const p = store.plan;
+      const all = columnState(p);
+      const ord = columnOrder(p);
+      const ro = store.readOnly;
+      return `<ol class="mc-list">${all.map((c) => {
+        const i = ord.indexOf(c.key);
+        const lbl = esc(columnLabel(c));
+        return `<li class="mc-row${c.visible ? '' : ' off'}"><label class="chk"><input type="checkbox" data-mc="vis" data-k="${c.key}"${c.visible ? ' checked' : ''}${c.fixed ? ' disabled' : ''}> <span class="mc-name">${lbl}</span></label><span class="mc-type muted">${c.fixed ? 'pinned' : c.field ? `custom · ${esc(typeLabel(c.field.type).toLowerCase())}` : 'built-in'}</span>
+<span class="mc-acts">${c.fixed ? '' : `<button type="button" class="btn ic sm" data-mc="left" data-k="${c.key}" aria-label="Move ${lbl} left (up)"${i <= 0 ? ' disabled' : ''}>↑</button><button type="button" class="btn ic sm" data-mc="right" data-k="${c.key}" aria-label="Move ${lbl} right (down)"${i >= ord.length - 1 ? ' disabled' : ''}>↓</button>`}${c.field && !ro ? `<button type="button" class="btn sm" data-mc="rename" data-k="${c.key}">Rename</button>${c.field.type === 'select' ? `<button type="button" class="btn sm" data-mc="opts" data-k="${c.key}">Options</button>` : ''}<button type="button" class="btn sm danger" data-mc="del" data-k="${c.key}" aria-label="Delete column ${lbl}">Delete</button>` : ''}</span></li>`;
+      }).join('')}</ol>${store.readOnly ? '' : '<button type="button" class="btn sm" data-mc="add">+ Add custom column</button>'}`;
+    };
+    modal({
+      title: 'Columns',
+      wide: true,
+      body: `<p class="hint">Order is left → right (top = left). Task name stays first. Order, visibility and widths are saved in the plan file.</p><div class="mc-wrap">${listHTML()}</div>`,
+      actions: [{ label: 'Reset to default', value: 'reset' }, { label: 'Done', value: 'cancel', primary: true }],
+      onAction: (v, dlg) => {
+        if (v === 'reset') {
+          colCommit('Reset columns', (pl) => (resetColumns(pl), true));
+          dlg.querySelector('.mc-wrap').innerHTML = listHTML();
+          return false;
+        }
+        return true;
+      },
+      onMount: (dlg) => {
+        const wrap = dlg.querySelector('.mc-wrap');
+        const refresh = (focusSel) => {
+          wrap.innerHTML = listHTML();
+          const n = focusSel && wrap.querySelector(focusSel);
+          if (n && !n.disabled) n.focus();
+          else if (focusSel) (wrap.querySelector(focusSel.replace(/data-mc="\w+"/, 'data-mc="vis"')) || wrap).focus?.();
+        };
+        wrap.addEventListener('change', (e) => {
+          const el = e.target.closest('[data-mc="vis"]');
+          if (!el) return;
+          colCommit('Columns', (pl) => (setColumnVisible(pl, el.dataset.k, el.checked), true));
+          refresh(`[data-mc="vis"][data-k="${el.dataset.k}"]`);
+        });
+        wrap.addEventListener('click', async (e) => {
+          const b = e.target.closest('button[data-mc]');
+          if (!b) return;
+          const k = b.dataset.k;
+          const f = k ? findField(store.plan, k.replace(/^cf_/, '')) : null;
+          const mc = b.dataset.mc;
+          if (mc === 'left' || mc === 'right') {
+            const ord = columnOrder(store.plan);
+            const i = ord.indexOf(k);
+            colCommit('Move column', (pl) => moveColumnTo(pl, k, mc === 'left' ? ord[i - 1] : ord[i + 2] ?? null));
+          } else if (mc === 'rename' && f) await renameFieldUI(f);
+          else if (mc === 'opts' && f) await optionsUI(f);
+          else if (mc === 'del' && f) await deleteFieldUI(f);
+          else if (mc === 'add') await addFieldUI(null);
+          refresh(`[data-mc="${mc}"]${k ? `[data-k="${k}"]` : ''}`);
+        });
+      },
+    });
+  }
+
+  // ---- row context menu --------------------------------------------------------
+  function addSubtask(id) {
+    if (store.readOnly) return store.emit('readonly');
+    let nid = null;
+    store.commit('Add subtask', (p) => {
+      const idx = p.rows.findIndex((r) => r.id === id);
+      const t = p.rows[idx];
+      if (!t || !isTask(t)) return false;
+      let end = idx + 1;
+      while (end < p.rows.length && isTask(p.rows[end]) && p.rows[end].level > t.level) end++;
+      const nt = createTask(p, { name: 'New subtask', start: t.start, duration: 1, level: t.level + 1 });
+      p.rows.splice(end, 0, nt);
+      t.collapsed = false;
+      nid = nt.id;
+      return undefined;
+    });
+    return afterInsert(nid);
+  }
+
+  function rowMenu(id, at) {
+    const r = store.d.tree.byId.get(id);
+    if (!r) return;
+    if (!isTask(r)) {
+      sectionMenu(id, at);
+      return;
+    }
+    const ro = store.readOnly;
+    const n = store.selection.size;
+    openMenu(at, [
+      { label: 'Open details', hint: 'Enter', action: () => openCard(id) },
+      { label: 'Edit name', hint: 'F2', disabled: ro, action: () => {
+        select(id, { col: 'name' });
+        app.grid.startEdit(id, 'name');
+      } },
+      { label: 'Add subtask', disabled: ro, action: () => addSubtask(id) },
+      { label: 'Add task below', hint: 'Insert', disabled: ro, action: addTask },
+      { sep: true },
+      { label: 'Indent', hint: 'Tab', disabled: ro, action: app.indent },
+      { label: 'Outdent', hint: 'Shift+Tab', disabled: ro, action: app.outdent },
+      { sep: true },
+      { label: n > 1 ? `Delete ${n} rows` : 'Delete', hint: 'Del', danger: true, disabled: ro, action: app.deleteSelection },
+    ], { label: `Task ${r.name}` });
   }
 
   function conflictsMenu(anchor) {
@@ -806,7 +1065,7 @@ export function boot(sourceHtml) {
     store.ui(true);
   }
   function clearFilters() {
-    store.filter = { text: '', owner: '', status: '', section: '', overdue: false };
+    store.filter = { text: '', owner: '', status: '', section: '', overdue: false, field: null };
     search.value = '';
     store.ui(true);
   }
@@ -832,8 +1091,10 @@ export function boot(sourceHtml) {
   function showHelp() {
     const rows = [
       ['↑ ↓ ← →', 'Move between cells (Shift+↑/↓ extends the selection)'],
-      ['Enter / F2', 'Edit the cell. Enter on the # column opens the task card'],
-      ['Shift+Enter', 'Open the task card'],
+      ['Double-click', 'Edit a cell (read-only cells open the task details)'],
+      ['↗ / Enter', 'Open task details from the task name (Enter on other cells edits them; Shift+Enter always opens)'],
+      ['F2', 'Edit the selected cell'],
+      ['Right-click', 'Row: open details, edit name, add subtask, indent, outdent, delete. Column header: move, hide, add / rename / delete custom columns'],
       ['Type any key', 'Start editing the cell'],
       ['Esc', 'Cancel editing / close the card. Press again to let Tab leave the grid'],
       ['Tab / Shift+Tab', 'Indent / outdent the selected tasks'],
@@ -845,10 +1106,12 @@ export function boot(sourceHtml) {
       [`${K}+F`, 'Search'],
       [`${K}+S`, 'Save the plan into this .html file (Edge / Chrome write it in place; other browsers download an updated copy)'],
       [`Shift+${K}+S`, 'Save as: write to a new file'],
-      ['Gantt', 'Drag a bar to move it, drag its right edge to change the finish. Drag the small circle at a bar’s start or finish onto another bar to link them (drop on the left half → successor start, right half → successor finish). Click an arrow to edit or delete it; double-click a bar to open the card.'],
+      ['Gantt', 'Drag a bar to move it, drag its right edge to change the finish. Drag the small circle at a bar’s start or finish onto another bar to link them (drop on the left half → successor start, right half → successor finish). Click an arrow to edit or delete it; click a bar (without dragging) to open its details.'],
+      ['Description', `Rich text: paste from Word, Outlook, OneNote or a web page keeps headings, lists, tables and links (scripts, images and styles are removed). ${K}+B/I/U, ${K}+K for a link.`],
       ['Predecessors', 'Type outline numbers or #IDs with optional type and lag: 3, 1.2FS+2d, #7SS-1d, 4FF+1d, 5SF'],
       ['Board', 'Drag cards between columns; Shift+←/→ moves the focused card'],
       ['Grid rows', 'Drag the # cell to reorder; drop on the middle of a task to make it a subtask'],
+      ['Columns', 'Drag a column header to reorder it. Columns ▾ → Manage columns for keyboard reordering, custom columns and visibility'],
     ];
     modal({
       title: 'Keyboard shortcuts & tips',
@@ -863,6 +1126,15 @@ export function boot(sourceHtml) {
     'use-file': useFileVersion,
     save: () => saveToFile(false),
     'banner-close': hideBanner,
+    'hint-close': () => {
+      storage.setPrefs({ hintDismissed: true });
+      q('.hint-bar').hidden = true;
+      app.grid.focus();
+    },
+    'open-details': () => {
+      const id = store.active && store.active.id;
+      if (id != null) openCard(id);
+    },
     'add-task': addTask,
     'add-section': () => addSection(),
     indent: app.indent,
@@ -895,7 +1167,7 @@ export function boot(sourceHtml) {
     unlock,
     help: showHelp,
   };
-  for (const scope of [q('.top'), q('.banner'), q('.toolbar')]) {
+  for (const scope of [q('.top'), q('.banner'), q('.hint-bar'), q('.toolbar')]) {
     scope.addEventListener('click', (e) => {
       const b = e.target.closest('[data-act]');
       if (b && scope.contains(b) && ACTS[b.dataset.act]) ACTS[b.dataset.act](b, e);
@@ -1031,6 +1303,9 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
     pressed('critical', s.showCritical);
     pressed('f-overdue', store.filter.overdue);
     pressed('present', store.presenter);
+    const act = store.active && store.selection.size === 1 ? store.d.tree.byId.get(store.active.id) : null;
+    q('.tb-open').hidden = !act || !isTask(act) || store.cardId === act.id;
+    q('.hint-bar').hidden = !!storage.prefs().hintDismissed || store.readOnly || store.presenter;
     q('[data-act="undo"]').disabled = !store.undoStack.length;
     q('[data-act="redo"]').disabled = !store.redoStack.length;
     q('[data-act="theme"]').textContent = `Theme: ${theme[0].toUpperCase()}${theme.slice(1)}`;
@@ -1042,6 +1317,8 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
     fillSelect(q('[data-filter="section"]'), store.plan.rows.filter((r) => !isTask(r)).map((r) => [String(r.id), r.name]), 'All sections');
     if (document.activeElement !== search) search.value = store.filter.text;
     q('.filters').classList.toggle('active', !!store.d.matches);
+    const ff = store.filter.field && findField(store.plan, store.filter.field.id);
+    q('[data-act="f-clear"]').title = ff ? `Clear filters (column filter: ${ff.name} = ${store.filter.field.value || 'empty'})` : 'Clear filters';
     for (const v of VIEWS) q(`[data-act="view-${v}"]`).setAttribute('aria-selected', String(store.view === v));
   }
 

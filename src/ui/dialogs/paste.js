@@ -44,8 +44,9 @@ export async function openPasteImport(app, initialText = '') {
   });
 
   function renderMapping(dlg) {
+    const targets = [...IMPORT_FIELDS, ...(store.plan.fields || []).map((f) => ({ key: `cf_${f.id}`, label: `${f.name} (custom column)` }))];
     const fieldOpts = (i) =>
-      `<option value="">— ignore —</option>${IMPORT_FIELDS.map((f) => `<option value="${f.key}"${st.mapping[f.key] === i ? ' selected' : ''}>${esc(f.label)}</option>`).join('')}`;
+      `<option value="">— ignore —</option>${targets.map((f) => `<option value="${f.key}"${st.mapping[f.key] === i ? ' selected' : ''}>${esc(f.label)}</option>`).join('')}`;
     dlg.querySelector('.pi-map').innerHTML = st.headers
       .map((h, i) => `<label class="pi-col"><span class="pi-src" title="${esc(h)}">${esc(h || `Column ${i + 1}`)}</span><select data-col="${i}" aria-label="Map column ${esc(h || i + 1)}">${fieldOpts(i)}</select></label>`)
       .join('');
@@ -68,7 +69,7 @@ export async function openPasteImport(app, initialText = '') {
     const sig = `${hasHeader}|${st.headers.join('\u0001')}`;
     if (sig !== st.sig) {
       st.sig = sig;
-      st.mapping = hasHeader ? detectColumns(st.headers) : { name: 0 };
+      st.mapping = hasHeader ? detectColumns(st.headers, store.plan.fields || []) : { name: 0 };
       renderMapping(dlg);
     }
     const rows = hasHeader ? st.table.slice(1) : st.table;

@@ -187,7 +187,8 @@ export function createGantt(app, root) {
     tmp.setAttribute('d', '');
     winEl.querySelectorAll('.link-target').forEach((n) => n.classList.remove('link-target'));
     if (!a.moved) {
-      if (a.mode !== 'link') app.select(a.id, { col: 'name', keepCard: true });
+      // a click without dragging opens the task details
+      if (a.mode !== 'link') app.openCard(a.id, { focus: false });
       return;
     }
     suppressClick = true;
@@ -228,7 +229,7 @@ export function createGantt(app, root) {
     }
     if (store.readOnly) {
       const bar = e.target.closest('.bar');
-      if (bar) app.select(Number(bar.dataset.id), { col: 'name', keepCard: true });
+      if (bar) app.openCard(Number(bar.dataset.id), { focus: false });
     }
   });
   winEl.addEventListener('dblclick', (e) => {

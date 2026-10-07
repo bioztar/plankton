@@ -6,6 +6,7 @@ import { isOverdue, statusDay } from '../../model/stats.js';
 import { fmtDate, statusSlug } from '../format.js';
 import { parseISO, toYMD } from '../../schedule/calendar.js';
 import { preserveFocus } from '../dom.js';
+import { descText, firstLine } from '../../util/sanitize.js';
 
 export function createBoard(app, root) {
   const store = app.store;
@@ -27,6 +28,7 @@ export function createBoard(app, root) {
 <div class="bc-top"><span class="bc-num">${esc(d.tree.outline.get(t.id))}</span>${sec ? `<span class="bc-sec">${esc(sec.name)}</span>` : ''}${t.priority === 'High' || t.priority === 'Critical' ? `<span class="prio pr-${t.priority.toLowerCase()}">${t.priority}</span>` : ''}</div>
 <div class="bc-name">${t.milestone ? '<span class="ms-ic">◆</span> ' : ''}${esc(t.name)}</div>
 ${parent ? `<div class="bc-parent">${esc(parent.name)}</div>` : ''}
+${firstLine(descText(t)) ? `<div class="bc-desc">${esc(firstLine(descText(t), 120))}</div>` : ''}
 <div class="bc-meta"><span>${esc(t.owner || 'Unassigned')}</span><span class="${od ? 'overdue-txt' : ''}">${od ? 'Overdue · ' : ''}${esc(fmtDate(t.finish, year))}</span></div>
 <div class="bc-prog" aria-hidden="true"><span style="width:${t.progress}%"></span></div></article>`;
         })

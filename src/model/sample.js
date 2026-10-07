@@ -4,6 +4,7 @@ import { createPlan, createTask, createSection, PALETTE } from './plan.js';
 import { parseISO, toISO, today, mondayOf, workdaysInclusive } from '../schedule/calendar.js';
 import { normalizeLevels, computeTree } from './tree.js';
 import { autoSchedule, rollup } from '../schedule/engine.js';
+import { markdownToHtml } from '../util/markdown.js';
 
 const color = (name) => PALETTE.find((p) => p.name === name).color;
 
@@ -11,7 +12,7 @@ const color = (name) => PALETTE.find((p) => p.name === name).color;
 const SPEC = [
   { section: 'Plan & prepare', color: 'Blue' },
   ['init', 0, 'Project initiation'],
-  ['kick', 1, 'Kick-off meeting', 1, '', 'Project manager', { desc: 'Agree scope, roles and the **4-week timeline**.\n\n- Confirm sponsor\n- Share the plan link' }],
+  ['kick', 1, 'Kick-off meeting', 1, '', 'Project manager', { descHtml: markdownToHtml('Agree scope, roles and the **4-week timeline**.\n\n- Confirm sponsor\n- Share the plan link') }],
   ['crit', 1, 'Define success criteria', 2, 'kick', 'Project manager'],
   ['raci', 1, 'Stakeholder map & RACI', 2, 'crit:SS:1', 'Change manager'],
   ['ready', 0, 'Readiness assessment'],

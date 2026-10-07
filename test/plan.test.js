@@ -1,3 +1,4 @@
+import './minidom.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createPlan, normalizePlan, serializePlan, parsePlanJSON, saveBaseline } from '../src/model/plan.js';

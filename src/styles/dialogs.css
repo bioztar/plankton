@@ -40,3 +40,12 @@ dialog::backdrop { background: rgba(10, 15, 25, 0.45); }
 .kbd-table td:first-child { white-space: nowrap; width: 42%; }
 .help-h { font-size: 14px; margin: 16px 0 6px; }
 .help-share { margin: 0 0 8px; padding-left: 20px; font-size: 13px; line-height: 1.5; }
+.mc-list { list-style: none; margin: 0 0 10px; padding: 0; border: 1px solid var(--line); border-radius: 8px; max-height: 55vh; overflow: auto; }
+.mc-row { display: flex; align-items: center; gap: 10px; padding: 4px 10px; border-bottom: 1px solid var(--grid); }
+.mc-row:last-child { border-bottom: 0; }
+.mc-row.off .mc-name { color: var(--muted); }
+.mc-row .chk { min-width: 180px; }
+.mc-type { font-size: 12px; flex: 1; }
+.mc-acts { display: flex; gap: 4px; }
+.cf-err:empty { display: none; }
+.m-body .fld textarea { width: 100%; }
