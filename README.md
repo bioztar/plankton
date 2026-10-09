@@ -179,3 +179,5 @@ Press Ctrl+Z to undo, or go back to an earlier version with **File › Version h
 ---
 
 PLANkton is built with plain HTML, CSS and JavaScript, no dependencies. Developers: see [CONTRIBUTING.md](CONTRIBUTING.md) for how to build and test it.
+
+Free and open source under the [MIT licence](LICENSE): use it, change it and share it.
