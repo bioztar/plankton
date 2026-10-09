@@ -1,52 +1,181 @@
-# planboard
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/plankton-logo-dark.svg">
+    <img src="docs/brand/plankton-logo.svg" alt="PLANkton" width="320">
+  </picture>
+</p>
 
-Single-file HTML project planner: nested tasks, sections, task cards, Gantt with FS/SS/FF/SF dependencies. Opens in any browser, no install.
+<p align="center"><b>Plan your project in one file: tasks, a Gantt chart and a board, right in your browser. No sign-up, no install, works offline.</b></p>
 
-**Use it:** download [`dist/planboard.html`](dist/planboard.html) and double-click it. It works offline, needs no server and makes no network requests (a strict Content-Security-Policy blocks them). The first open shows a sample plan.
+<p align="center">
+  <img src="docs/img/grid-gantt.png" alt="PLANkton showing the sample plan: task list on the left, Gantt chart on the right" width="900">
+</p>
 
-## Features
+<h2 align="center">
+  <a href="https://github.com/bioztar/plankton/raw/main/dist/plankton.html">⬇ Download PLANkton</a>
+</h2>
 
-- **Task tree:** unlimited nesting, Tab / Shift+Tab to indent and outdent, collapse and expand, drag to reorder or re-parent, automatic outline numbers (1, 1.2, 1.2.3). Summary tasks roll up dates and duration-weighted progress.
-- **Sections:** coloured header rows that tint the rows and bars beneath them.
-- **Editing:** single click selects, double-click / F2 / typing edits a cell (Status, Priority and choice columns open their option list with one click, Enter or Space); drag a row by its **#** cell to move it (Esc cancels); Shift+click, Shift+arrows or dragging across cells selects a range. Ctrl/Cmd+C / V / X copy, paste and cut cells as tab-separated text (Excel and Google Sheets compatible): one copied value fills the whole selected range, a block pastes down/right from the active cell. Ctrl/Cmd+D or dragging the small square at the range's bottom-right corner fills down; Delete / Backspace clears the cells. Values are checked per column (invalid cells are skipped with one summary) and a whole paste is one undo step. The grid scrolls horizontally and vertically to keep the active cell in view beside the pinned name column; hover a row and click **↗** (or press Enter on the name, use the toolbar **Open details**, right-click → Open details, or click a Gantt bar) to open the task details.
-- **Task details:** a large, resizable side panel (maximize for full window; ↑/↓ step through tasks; Esc closes) with the task name, a compact fields strip (dates, working-day duration — edit any two and the third is recomputed — progress, status, priority, owner, workstream, milestone, tags, custom columns), a rich-text **description**, predecessors / successors, notes, per-task custom fields and timestamps.
-- **Rich-text descriptions:** WYSIWYG editor (headings, bold/italic/underline/strike, lists, checklists, quotes, code, links, tables, rules). Paste from Word, Outlook, OneNote or web pages keeps the structure; Markdown-looking text is converted. Everything is passed through a strict DOMParser allow-list sanitizer on paste and on load (no scripts, styles, images or event handlers), stored as `descHtml`; CSV exports plain text. Old markdown descriptions are migrated on load.
-- **Status and priority options:** the Status and Priority lists belong to the plan: add, rename (tasks follow), drag to reorder, delete (choose where tasks move), pick a colour, and flag which statuses **count as complete** (default: Done). Open from the column header menu (**Edit options…**, also for custom single-select columns) or File › Status / Priority options. Complete tasks get a soft green row and a ✓, progress 100 %, and a solid green Gantt bar or milestone; **Hide completed** filters them out. Setting progress to 100 never changes the status.
-- **Columns:** right-click a header or use **Columns ▾** to show/hide, move left/right, or drag headers to reorder (task name stays first). Add plan-level **custom columns** (text, number, date, single-select, checkbox, person, URL), rename, edit options, delete (undoable); per-task custom fields can be promoted with “Show as column”. Order, visibility and widths are saved in the plan file; search, CSV export and paste import include custom columns.
-- **Gantt:** day / week / month / quarter zoom, fit project, today line, weekend shading. Bars can be dragged and resized, and dependencies of all four types take lag or lead (`4FS+2d`, `7SS-1d`).
-- **Scheduling:** auto-schedule or conflict highlighting, cycle refusal, critical path, baseline with variance.
-- **Views:** Board (kanban by status) and Logs (risks, decisions, open questions).
-- **Save in place:** **Save** (header button or Ctrl/Cmd+S) writes the plan into the .html file itself. In Edge / Chrome / Brave the very first Save of a file in a browser explains why and asks you to pick that same file once (the current file name is filled in; **File › Open & connect file…** does the same from an Open dialog); after that Save writes silently, or shows only the small browser allow prompt when permission has lapsed; the file handle is remembered per plan and opened file in IndexedDB, so Save keeps working after a reload while the browser still grants access. If the file was changed by someone else since you opened it, Save asks before overwriting. **Save as…** (Shift+Ctrl/Cmd+S) always asks. Safari and Firefox (no File System Access API) download `<plan name>.html` instead: replace the original file with it. The header shows *Unsaved changes* / *Saved to file 14:32*, and closing the tab with unsaved edits asks first.
-- **Version history:** every Save adds a version inside the file (time, optional author name asked once, a short list of changes, and a gzip-compressed snapshot; the last 50 versions or 5 MB). **File › Version history** lists them newest first: preview read-only, restore (an undoable, unsaved edit) or export as JSON.
-- **Sharing:** put the .html on OneDrive / Teams / SharePoint; anyone opens it in Edge or Chrome, edits and presses Save. Every saved copy opens editable (including v1 “standalone copies”); **Export read-only presenter copy** is the only way to make a read-only file.
-- **Data:** autosave per plan in `localStorage` as a safety net, multiple plans, JSON import/export (picker or drag and drop), paste import from Excel / Planner / Smartsheet, CSV export. Newer edits saved in the browser win when a file is reopened, with a banner to switch back to the file version; Save then writes the version shown.
-- **Presenting and output:** presenter mode, landscape print layout, Gantt PNG export.
-- **Quality of life:** undo / redo with up to 200 steps (history capped at ~20 MB, unchanged rows shared between steps), search and filters, column show/hide and resize, light and dark themes. Press `?` in the app to see the keyboard shortcuts.
+<p align="center"><sub>One file, about 450 KB. If your browser shows a page full of code instead of downloading, go back, right-click the link and choose <b>Save link as…</b></sub></p>
 
-## Development
+---
 
-Requires Node 18 or later. There are no dependencies to install.
+## Get started in 2 minutes
 
-```sh
-npm test          # node --test: scheduling, tree, links, paste import, JSON, markdown, sanitizer, custom columns
-npm run build     # node build.mjs -> dist/planboard.html
-npm run check     # fails if dist/planboard.html is stale
-```
+1. **Download** [`plankton.html`](https://github.com/bioztar/plankton/raw/main/dist/plankton.html) and put it somewhere you will find it again (Documents, a OneDrive folder, a shared drive).
+2. **Double-click it.** It opens in your web browser and shows a sample plan, *Software rollout*, so you can look around.
+3. **Start your own plan:** **File › New plan…**, type a name. You can rename it any time by clicking the plan name at the top left (or **File › Rename plan…**).
+4. **Add tasks:** click **+ Task** (or press Insert), type the name, press Enter. Double-click any cell to change dates, duration, owner or status.
+5. **Save:** click **Save** (or press Ctrl+S, ⌘+S on a Mac). Your plan is stored *inside the .html file itself*.
+   - **Chrome and Edge:** the first time you save a file, PLANkton asks you to pick that same file once, so the browser lets it write to it. After that, Save just saves.
+   - **Safari and Firefox:** these browsers cannot write to files, so Save downloads an updated copy of the file. Replace your old file with the downloaded one.
 
-`dist/planboard.html` is committed. CI runs the tests, rebuilds, and fails if `dist/` differs from the committed copy, so rebuild and commit it with every source change.
+Every Save also adds a **version** you can go back to (see [Version history](#version-history)).
 
-### Layout
+> Tip: one file can hold one plan you share, but you can keep as many plans as you like in your browser: use the **▾** next to the plan name to switch between them.
 
-| Path | What |
+## Everyday use
+
+### Edit like a spreadsheet
+
+Click a cell to select it, double-click (or just start typing) to edit. Drag across cells, or hold Shift and use the arrow keys, to select a block.
+
+- **Copy and paste** with Ctrl+C / Ctrl+V, also to and from Excel or Google Sheets. One copied value pasted onto a selection fills all of it.
+- **Fill down** with Ctrl+D, or drag the small square at the bottom-right of the selection.
+- **Delete** clears the selected cells. **Undo** (Ctrl+Z) takes back any change, a whole paste at once.
+- **Move a task** by dragging its number in the **#** column. Drop it onto the middle of another task to make it a subtask, or press **Tab** / **Shift+Tab** to indent and outdent.
+- **Choose a status or priority** with one click on the cell.
+
+![Selecting a block of cells in the grid](docs/img/editing.png)
+
+### Task details
+
+Hover a task and click **↗** (or press Enter on its name) to open the details panel: dates, progress, owner, tags, a description with headings, lists, checklists and links (paste from Word or Outlook keeps the formatting), notes, and the tasks it depends on.
+
+![The task details panel for “Pilot training sessions”](docs/img/task-details.png)
+
+### Sections
+
+Sections are coloured header rows that group tasks, such as *Plan & prepare* or *Pilot*. Add one with **+ Section**. The **⋯** button on a section lets you rename it, change its colour, add tasks to it or move it up and down with all its tasks.
+
+![The section menu](docs/img/sections.png)
+
+### Dependencies
+
+A dependency says “this task can only start when that one is done”. In the task details, type the number of the task it waits for under **Predecessors** (for example `3.1`), or in the Gantt drag the small circle at the end of one bar onto another bar.
+
+Other kinds are possible too: *start together* (`3.1SS`), *finish together* (`3.1FF`), and a gap or overlap in working days (`3.1FS+2d`, `3.1FS-1d`). With **Auto-schedule** on, moving a task moves everything that depends on it.
+
+### Gantt chart
+
+The right half of **Grid + Gantt** shows every task as a bar on a calendar.
+
+- Drag a bar to move the task, drag its right edge to make it longer or shorter.
+- **Zoom** by day, week, month or quarter, or **Fit** to see the whole project. **Today** jumps to today's date (the orange line).
+- **Critical path** highlights the chain of tasks that decides your finish date.
+- **Baseline** saves today's dates so you can later see how far the plan has moved.
+
+![The Gantt chart with the critical path highlighted](docs/img/gantt.png)
+
+### Board
+
+**Board** shows your tasks as cards in columns by status. Drag a card to another column to change its status.
+
+![The Board view](docs/img/board.png)
+
+### Logs
+
+**Logs** keeps the lists every project needs next to the plan: **risks** (impact, likelihood, mitigation), **decisions** (who decided and when) and **open questions**.
+
+![The Logs view with risks, decisions and open questions](docs/img/logs.png)
+
+### Status and priority options
+
+The choices in the Status and Priority columns belong to your plan. Open **File › Status options…** (or right-click the column header › **Edit options…**) to add, rename, recolour, reorder or remove them, and to tick which statuses count as **complete**. Complete tasks get a green ✓ and **Hide completed** filters them out.
+
+![Editing the status options](docs/img/status-options.png)
+
+### Version history
+
+Every Save adds a version inside the file, with the time, your name (asked once) and a short list of what changed. **File › Version history…** lists them: **Preview** one, **Restore** it (you can undo that too), or export it. The file keeps the last 50 versions.
+
+![Version history after two saves](docs/img/version-history.png)
+
+### Sharing a plan
+
+A plan is just a file, so share it like any document:
+
+- **Send the .html file** by email or chat, or put it in a shared folder (OneDrive, Teams, SharePoint, Google Drive). Anyone can open it in their browser and edit it; nothing to install.
+- **Working together on one file:** open the copy in the shared folder from your synced folder in Chrome or Edge, edit, and Save. If someone else saved it since you opened it, PLANkton asks before overwriting.
+- **Read-only copy:** **File › Export read-only presenter copy (.html)** makes a version others can view but not change.
+- **Presenting in a meeting:** **Present** hides the editing tools and makes the text larger.
+
+![Presenter mode](docs/img/presenter.png)
+
+You can also **print** (Ctrl+P), save the Gantt as a picture (**File › Export Gantt as PNG**), or export to a spreadsheet (**File › Export CSV**).
+
+## Keyboard shortcuts
+
+On a Mac use ⌘ instead of Ctrl. Press **?** in PLANkton for the full list.
+
+| Keys | What it does |
 | --- | --- |
-| `src/schedule/` | Pure scheduling (no DOM): working-day calendar, link types and lag, auto-schedule, conflicts, cycles, roll-up, critical path |
-| `src/model/` | Plan schema and normalisation, flat-row tree operations, edit helpers, stats, sample plan |
-| `src/io/` | Storage, paste (TSV/CSV) import, CSV export, payload embedding, save-in-place (`filesave.js`: save-state machine, handle registry, conflict check, save flow) |
-| `src/util/` | HTML escaping, markdown → HTML, description sanitizer |
-| `src/ui/` | App shell, `grid/`, `gantt/`, `card/`, `board/`, `logs/`, `dialogs/`, print |
-| `src/styles/` | CSS, concatenated in file-name order |
-| `build.mjs` | Zero-dependency bundler: resolves the relative named ES imports from `src/main.js` and inlines JS and CSS into `src/index.html` |
+| Arrow keys | Move between cells (with Shift: select a block) |
+| Double-click, F2 or just type | Edit the cell |
+| Enter on a task name | Open the task details |
+| Esc | Cancel editing / close the details panel |
+| Ctrl+C / Ctrl+V / Ctrl+X | Copy / paste / cut cells |
+| Ctrl+D | Fill down |
+| Delete | Clear the selected cells |
+| Tab / Shift+Tab | Indent / outdent (make or undo a subtask) |
+| Insert or Ctrl+Enter | New task below (Shift+Insert: new section) |
+| Alt+Shift+↑ / ↓ | Move rows up / down |
+| Ctrl+Z / Ctrl+Shift+Z | Undo / redo |
+| Ctrl+F | Search |
+| Ctrl+S | Save |
+| Ctrl+Shift+S | Save as a new file |
+| Ctrl+P | Print |
+| ? | Shortcuts and help |
 
-**Dates:** stored as ISO `YYYY-MM-DD` and handled internally as integer UTC day numbers. `new Date('YYYY-MM-DD')` is never used, so there is no timezone drift. Working days are Monday to Friday, and lag is counted in working days.
+## Privacy
 
-**Bundler limits:** modules may only use `import { a, b as c } from './x.js'` and `export function|const|let|class`. The build fails on any other syntax, and on an import of a name that the target module does not export.
+- **Works offline.** After you download it, PLANkton never needs the internet.
+- **No data leaves your computer.** Your plan lives in the .html file and, as a safety net, in your browser's own storage on this computer. The file is locked down so it *cannot* send anything anywhere.
+- **No accounts, no tracking, no ads.**
+
+## Browser support
+
+| Browser | Open and edit | Save | Version history |
+| --- | --- | --- | --- |
+| Chrome, Edge, Brave (Windows, Mac, Linux) | Yes | Saves straight into the file (pick the file once) | Yes |
+| Safari (Mac) | Yes | Downloads an updated copy | Yes |
+| Firefox | Yes | Downloads an updated copy | Yes |
+| Phones and tablets | Not designed for small screens yet | | |
+
+## FAQ
+
+**Where is my data?**
+In the .html file, every time you Save. Between saves, your edits are also kept in your browser on this computer, so closing the tab does not lose them (PLANkton warns you if there are unsaved changes). If you open a file and your browser has newer edits of that same plan, PLANkton shows the newer edits and offers to switch back to the file.
+
+**How do I share a plan?**
+Send the saved .html file, or put it in a shared folder. See [Sharing a plan](#sharing-a-plan).
+
+**How do I back up a plan?**
+The saved .html file *is* the backup; copy it anywhere. **File › Export JSON** gives you a small data-only file as well.
+
+**How do I move a plan to a newer version of PLANkton?**
+Your plan file contains the version of PLANkton it was saved with. To upgrade it:
+1. Download the new [`plankton.html`](https://github.com/bioztar/plankton/raw/main/dist/plankton.html) and open it.
+2. Drag your existing plan file onto the PLANkton window (or use **File › Import plan file (.html or .json)…**). Your plan opens with its version history.
+3. **File › Save as…** and choose your old file to replace it (in Safari or Firefox, Save downloads the upgraded file: replace the old one with it).
+
+This also works for files from **planboard**, the earlier name of PLANkton: they open and save as normal. Plans, your theme and your name saved by planboard in the same browser carry over automatically.
+
+**Can I import from Excel, Planner or Smartsheet?**
+Yes: copy the rows in the other app, then **File › Paste table (Excel, Planner, Smartsheet)…**.
+
+**Something looks wrong after an edit.**
+Press Ctrl+Z to undo, or go back to an earlier version with **File › Version history…**.
+
+---
+
+PLANkton is built with plain HTML, CSS and JavaScript, no dependencies. Developers: see [CONTRIBUTING.md](CONTRIBUTING.md) for how to build and test it.

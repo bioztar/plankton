@@ -1,13 +1,14 @@
-// Zero-dependency bundler: inlines src/ ES modules + CSS into dist/planboard.html.
-//   node build.mjs          write dist/planboard.html
-//   node build.mjs --check  exit 1 if dist/planboard.html is stale
+// Zero-dependency bundler: inlines src/ ES modules + CSS into dist/plankton.html.
+//   node build.mjs          write dist/plankton.html
+//   node build.mjs --check  exit 1 if dist/plankton.html is stale
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const SRC = join(ROOT, 'src');
-const OUT = join(ROOT, 'dist', 'planboard.html');
+const OUT = join(ROOT, 'dist', 'plankton.html');
+const BRAND = join(ROOT, 'docs', 'brand');
 
 const IMPORT_RE = /^import\s*\{([^}]*)\}\s*from\s*'(\.{1,2}\/[^']+)';?[ \t]*$/gm;
 const EXPORT_RE = /^export\s+(?:async\s+)?(function\*?|const|let|class)\s+([A-Za-z_$][\w$]*)/gm;
@@ -76,13 +77,36 @@ export function bundleCSS() {
     .join('\n\n');
 }
 
+/** An SVG file ready to inline: no XML prolog, doctype or comments. */
+export function cleanSVG(text) {
+  const svg = text
+    .replace(/<\?xml[\s\S]*?\?>/g, '')
+    .replace(/<!DOCTYPE[^>]*>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .trim();
+  if (!/^<svg[\s>]/.test(svg) || !/<\/svg>$/.test(svg)) throw new Error('Brand file is not a single <svg> element.');
+  if (/<script|\son\w+\s*=|href\s*=\s*["']\s*(?!#)/i.test(svg)) throw new Error('Brand SVG must not contain scripts, event handlers or external links.');
+  return svg;
+}
+
+export function brandAssets(dir = BRAND) {
+  const read = (f) => cleanSVG(readFileSync(join(dir, f), 'utf8'));
+  return {
+    mark: read('plankton-mark.svg'),
+    favicon: 'data:image/svg+xml,' + encodeURIComponent(read('favicon.svg')),
+  };
+}
+
 export function build() {
   const tpl = readFileSync(join(SRC, 'index.html'), 'utf8');
   const js = bundleJS().replace(/<\/(script)/gi, '<\\/$1');
   const css = bundleCSS().replace(/<\/(style)/gi, '<\\/$1');
   const version = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
+  const brand = brandAssets();
   return tpl
     .replace(/@version/g, () => version)
+    .replace('@favicon', () => brand.favicon)
+    .replace('<!--@mark-->', () => brand.mark)
     .replace('/*@css*/', () => css)
     .replace('/*@js*/', () => js);
 }
@@ -97,10 +121,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       /* missing */
     }
     if (current !== html) {
-      console.error('dist/planboard.html is stale — run `npm run build` and commit the result.');
+      console.error('dist/plankton.html is stale — run `npm run build` and commit the result.');
       process.exit(1);
     }
-    console.log('dist/planboard.html is up to date.');
+    console.log('dist/plankton.html is up to date.');
   } else {
     mkdirSync(dirname(OUT), { recursive: true });
     writeFileSync(OUT, html);

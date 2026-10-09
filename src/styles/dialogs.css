@@ -84,3 +84,9 @@ dialog::backdrop { background: rgba(10, 15, 25, 0.45); }
 .vp-bar.done { background: var(--done-bar); }
 .vp-ms { position: absolute; top: 5px; width: 10px; height: 10px; margin-left: -5px; transform: rotate(45deg); background: var(--milestone); }
 .vp-ms.done { background: var(--done-bar); }
+
+.about { display: flex; gap: 14px; align-items: center; margin-bottom: 8px; }
+.about-mark svg { display: block; width: 56px; height: 56px; }
+.about-name { font-size: 20px; margin: 0 0 4px; }
+.about-name b { font-weight: 800; }
+.about-ver { font-size: 13px; color: var(--muted); }

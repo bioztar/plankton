@@ -141,7 +141,7 @@ async function ensurePermission(h) {
   }
 }
 
-const PICKER_TYPES = [{ description: 'Planboard plan (HTML)', accept: { 'text/html': ['.html', '.htm'] } }];
+const PICKER_TYPES = [{ description: 'PLANkton plan (HTML)', accept: { 'text/html': ['.html', '.htm'] } }];
 
 /**
  * env: { showSaveFilePicker (null when unsupported), registry, href, download(name, text),
@@ -230,7 +230,7 @@ export function createFileSaver(env) {
         if (!o.saveAs && env.explain && !(await env.explain())) return { status: 'cancelled' };
         picked = true;
         try {
-          h = await env.showSaveFilePicker({ suggestedName: o.suggestedName, types: PICKER_TYPES, id: 'planboard' });
+          h = await env.showSaveFilePicker({ suggestedName: o.suggestedName, types: PICKER_TYPES, id: 'plankton' });
         } catch (e) {
           if (e && e.name === 'AbortError') return { status: 'cancelled' };
           return fallback(o, 'picker');

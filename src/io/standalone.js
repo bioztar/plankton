@@ -25,8 +25,8 @@ export function extractPayload(html) {
  */
 export function buildPayload(plan, { presenter = false, at = new Date().toISOString(), history = null } = {}) {
   const data = JSON.parse(serializePlan(plan, false));
-  if (presenter) return { app: 'planboard', mode: 'presenter', readOnly: true, presenter: true, exportedAt: at, plan: data };
-  const out = { app: 'planboard', mode: 'edit', readOnly: false, presenter: false, savedAt: at, plan: data };
+  if (presenter) return { app: 'plankton', mode: 'presenter', readOnly: true, presenter: true, exportedAt: at, plan: data };
+  const out = { app: 'plankton', mode: 'edit', readOnly: false, presenter: false, savedAt: at, plan: data };
   if (history && history.length) out.history = history;
   return out;
 }

@@ -779,7 +779,7 @@ export function createGrid(app, root) {
     if (!h) return;
     colDrag = h.dataset.col;
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('application/x-planboard-col', colDrag);
+    e.dataTransfer.setData('application/x-plankton-col', colDrag);
     h.classList.add('dragging');
   });
   const dropSpot = (e) => {

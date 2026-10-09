@@ -116,7 +116,7 @@ export function createPlan(fields = {}) {
   const stamp = nowStamp();
   return {
     schema: SCHEMA_VERSION,
-    app: 'planboard',
+    app: 'plankton',
     id: uid(),
     name: 'Untitled plan',
     owner: '',
@@ -240,7 +240,7 @@ function normLog(list, kind) {
  */
 export function normalizePlan(input, report) {
   if (!input || typeof input !== 'object' || !Array.isArray(input.rows)) {
-    throw new Error('Not a planboard plan (missing "rows").');
+    throw new Error('Not a PLANkton plan (missing "rows").');
   }
   const base = createPlan();
   const plan = {

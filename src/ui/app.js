@@ -15,7 +15,7 @@ import { toCSV } from '../io/csv.js';
 import { embedPayload, extractPayload, resolveBoot, buildPayload, payloadStamp } from '../io/standalone.js';
 import { normHistory, makeVersion, appendVersion, mergeHistories, decodeSnapshot, replacePlanContents } from '../io/versions.js';
 import { createFileSaver, createHandleRegistry, initialSaveState, saveReducer, hasUnsaved, saveStatusText, suggestedFileName } from '../io/filesave.js';
-import { idbKV } from '../io/idb.js';
+import { idbKV, withLegacyKV, LEGACY_DB_NAME } from '../io/idb.js';
 import { escapeHtml as esc } from '../util/escape.js';
 import { GANTT_CSS } from './gantt/render.js';
 import { createGrid } from './grid/grid.js';
@@ -38,10 +38,14 @@ const VIEWS = ['plan', 'board', 'logs'];
 const THEMES = ['auto', 'light', 'dark'];
 const UI = { undo: false, touch: false, schedule: false, allowReadOnly: true };
 const K = isMac ? '⌘' : 'Ctrl';
+const APP_NAME = 'PLANkton';
+const appVersion = () => ((document.querySelector('meta[name="generator"]') || {}).content || '').split(' ')[1] || '';
+/** The header mark: docs/brand/plankton-mark.svg, inlined by the build. */
+const brandMark = () => (document.getElementById('brand-mark') || {}).innerHTML || '';
 
 function layoutHTML() {
   return `<header class="top">
-<div class="brand" aria-hidden="true">▦</div>
+<div class="brand" title="${APP_NAME} ${appVersion()}"><span class="brand-mark" aria-hidden="true">${brandMark()}</span><span class="brand-name"><b>PLAN</b>kton</span></div>
 <div class="plan-meta">
   <div class="pm-row1"><input class="plan-name" aria-label="Plan name" maxlength="200"><button type="button" class="btn ic edit-only" data-act="plans" aria-haspopup="menu" aria-label="Switch or manage plans" title="Plans">▾</button><span class="ro-badge">Read-only</span><span class="save-state" aria-live="polite"></span></div>
   <div class="pm-row2">
@@ -537,12 +541,14 @@ export function boot(sourceHtml) {
     const lower = name.toLowerCase();
     if (/\.(csv|tsv|txt)$/.test(lower)) return openPasteImport(app, text);
     let p;
+    let fileHistory = [];
     const report = {};
     try {
       if (/\.html?$/.test(lower) || /^\s*</.test(text)) {
         const payload = extractPayload(text);
         if (!payload || !payload.plan) throw new Error('this HTML file has no embedded plan');
         p = normalizePlan(payload.plan, report);
+        fileHistory = normHistory(payload.history);
       } else p = parsePlanJSON(text, report);
     } catch (e) {
       return toast(`Import failed: ${e.message}`, 'error', 7000);
@@ -559,6 +565,13 @@ export function boot(sourceHtml) {
         p.id = uid();
         p.name = `${p.name} (imported)`.slice(0, 200);
       }
+    }
+    // A saved .html (also from planboard 1.x) brings its version history along,
+    // so Save as… over the old file keeps every version.
+    if (fileHistory.length) {
+      const hist = historyFor(p.id);
+      hist.list = mergeHistories(hist.list, fileHistory);
+      hist.base = plainPlan(p);
     }
     addPlan(p);
     toast(`Imported “${p.name}”.${droppedNote(report)}`, report.droppedLinks.length ? 'warn' : 'info', 6000);
@@ -578,7 +591,7 @@ export function boot(sourceHtml) {
   const pickerFn = typeof window.showSaveFilePicker === 'function' ? (o) => window.showSaveFilePicker(o) : null;
   const saver = createFileSaver({
     showSaveFilePicker: pickerFn,
-    registry: createHandleRegistry(idbKV()),
+    registry: createHandleRegistry(withLegacyKV(idbKV(), idbKV(LEGACY_DB_NAME, 'kv', { create: false }))),
     href: location.href,
     download: (name, html) => download(name, html, 'text/html;charset=utf-8'),
     confirm: confirmOverwrite,
@@ -686,7 +699,7 @@ export function boot(sourceHtml) {
     if (typeof window.showOpenFilePicker !== 'function') return toast('This browser cannot write to files: use Edge or Chrome. Save downloads an updated copy instead.', 'warn', 7000);
     let h;
     try {
-      [h] = await window.showOpenFilePicker({ types: [{ description: 'Planboard plan (HTML)', accept: { 'text/html': ['.html', '.htm'] } }], multiple: false, id: 'planboard' });
+      [h] = await window.showOpenFilePicker({ types: [{ description: 'PLANkton plan (HTML)', accept: { 'text/html': ['.html', '.htm'] } }], multiple: false, id: 'plankton' });
     } catch (e) {
       if (e && e.name === 'AbortError') return undefined;
       return toast(`Could not open the file: ${(e && e.message) || e}`, 'error');
@@ -704,7 +717,7 @@ export function boot(sourceHtml) {
     } catch (e) {
       return toast(`Could not read “${h.name}”.`, 'error');
     }
-    if (!payload || !payload.plan) return toast(`“${h.name}” is not a saved planboard file.`, 'error', 6000);
+    if (!payload || !payload.plan) return toast(`“${h.name}” is not a saved PLANkton file.`, 'error', 6000);
     if (payload.plan.id !== store.plan.id) {
       if (await confirmBox(`“${h.name}” holds a different plan (“${payload.plan.name || 'untitled'}”). Open it as a plan in this browser? Save then writes to the file you are viewing, not to “${h.name}”.`, { ok: 'Open plan' })) importText(text, h.name);
       return undefined;
@@ -814,7 +827,7 @@ export function boot(sourceHtml) {
         { label: 'Priority options…', action: () => openOptionsEditor(app, 'priority') },
         { sep: true },
         { heading: 'Import' },
-        { label: 'Import JSON file…', hint: 'or drop a file', action: pickFile },
+        { label: 'Import plan file (.html or .json)…', hint: 'or drop a file', action: pickFile },
         { label: 'Paste table (Excel, Planner, Smartsheet)…', action: () => openPasteImport(app) },
         { sep: true }
       );
@@ -835,7 +848,7 @@ export function boot(sourceHtml) {
     );
     if (ro) items.push({ label: 'Unlock editing', action: unlock });
     else items.push({ label: 'Load sample plan', action: () => addPlan(samplePlan()) });
-    items.push({ label: 'Keyboard shortcuts & help', hint: '?', action: showHelp });
+    items.push({ label: 'Keyboard shortcuts & help', hint: '?', action: showHelp }, { label: `About ${APP_NAME}`, action: showAbout });
     openMenu(anchor, items, { label: 'File' });
   }
 
@@ -1238,9 +1251,17 @@ ${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x)
       ['Columns', 'Drag a column header to reorder it. Columns ▾ → Manage columns for keyboard reordering, custom columns and visibility'],
     ];
     modal({
-      title: 'Keyboard shortcuts & tips',
+      title: `${APP_NAME}: keyboard shortcuts & tips`,
       wide: true,
-      body: `<table class="kbd-table">${rows.map(([k, v]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(v)}</td></tr>`).join('')}</table><h3 class="help-h">How to share</h3><ol class="help-share"><li>Put this .html file on OneDrive, Teams or SharePoint (or any shared folder).</li><li>Open it in Edge or Chrome, for example from the synced OneDrive folder.</li><li>Edit, then press <b>Save</b> (${esc(K)}+S). The first time, pick the original file once (or use File › Open & connect file…); after that Save writes straight to it. Every Save adds a version to File › Version history.</li><li>In Safari or Firefox, Save downloads an updated copy: replace the original file with it.</li></ol><p class="hint">Edits are also autosaved in this browser (localStorage) as a safety net. Export JSON for backups; File → Export read-only presenter copy makes a version others cannot edit.</p>`,
+      body: `<table class="kbd-table">${rows.map(([k, v]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(v)}</td></tr>`).join('')}</table><h3 class="help-h">How to share</h3><ol class="help-share"><li>Put this .html file on OneDrive, Teams or SharePoint (or any shared folder).</li><li>Open it in Edge or Chrome, for example from the synced OneDrive folder.</li><li>Edit, then press <b>Save</b> (${esc(K)}+S). The first time, pick the original file once (or use File › Open & connect file…); after that Save writes straight to it. Every Save adds a version to File › Version history.</li><li>In Safari or Firefox, Save downloads an updated copy: replace the original file with it.</li></ol><p class="hint">Edits are also autosaved in this browser (localStorage) as a safety net. Export JSON for backups; File → Export read-only presenter copy makes a version others cannot edit.</p><p class="hint">${APP_NAME} ${esc(appVersion())} · works offline, no data leaves this computer.</p>`,
+      actions: [{ label: 'Close', value: 'cancel', primary: true }],
+    });
+  }
+
+  function showAbout() {
+    modal({
+      title: `About ${APP_NAME}`,
+      body: `<div class="about"><span class="about-mark" aria-hidden="true">${brandMark()}</span><div><p class="about-name"><b>PLAN</b>kton <span class="about-ver">${esc(appVersion())}</span></p><p>A project planner in a single file: tasks, sections, dependencies, Gantt, Board and Logs.</p></div></div><p>${APP_NAME} works offline. Your plans stay on this computer: inside this .html file when you Save, and in this browser's storage as a safety net. Nothing is sent anywhere and there is no tracking.</p><p>To share a plan, send the saved .html file. Newer versions: <a href="https://github.com/bioztar/plankton" target="_blank" rel="noopener noreferrer">github.com/bioztar/plankton</a></p>`,
       actions: [{ label: 'Close', value: 'cancel', primary: true }],
     });
   }
@@ -1466,7 +1487,7 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
     } else if (store.view === 'board') app.board.render();
     else app.logs.render();
     card.render();
-    document.title = `${store.plan.name} · Planboard`;
+    document.title = `${store.plan.name} · PLANkton`;
   }
 
   app.grid = createGrid(app, q('.grid-pane'));
@@ -1563,6 +1584,7 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
   if (!store.persistent && !persistent && !store.readOnly) toast('Browser storage is unavailable (private mode?): changes will not be saved. Use Export JSON.', 'error', 8000);
   if (store.readOnly) toast('Read-only shared copy. Click “Unlock editing” to make changes.', 'info', 5000);
   else app.grid.focus();
-  window.planboard = app;
+  window.plankton = app;
+  window.planboard = app; // pre-1.5 name, kept for existing scripts
   return app;
 }

@@ -1,7 +1,7 @@
 {
-  "name": "planboard",
-  "version": "1.4.0",
-  "description": "Single-file HTML project planner: nested tasks, sections, task cards, Gantt with FS/SS/FF/SF dependencies.",
+  "name": "plankton",
+  "version": "1.5.0",
+  "description": "PLANkton: single-file HTML project planner: nested tasks, sections, task cards, Gantt with FS/SS/FF/SF dependencies.",
   "private": true,
   "type": "module",
   "scripts": {

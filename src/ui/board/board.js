@@ -50,7 +50,7 @@ ${firstLine(descText(t)) ? `<div class="bc-desc">${esc(firstLine(descText(t), 12
     const c = e.target.closest('.bcard');
     if (!c) return;
     e.dataTransfer.setData('text/plain', c.dataset.id);
-    e.dataTransfer.setData('application/x-planboard-task', c.dataset.id);
+    e.dataTransfer.setData('application/x-plankton-task', c.dataset.id);
     e.dataTransfer.effectAllowed = 'move';
     c.classList.add('dragging');
   });
@@ -61,7 +61,7 @@ ${firstLine(descText(t)) ? `<div class="bc-desc">${esc(firstLine(descText(t), 12
   });
   root.addEventListener('dragover', (e) => {
     const col = e.target.closest('.bcol');
-    if (!col || !e.dataTransfer.types.includes('application/x-planboard-task')) return;
+    if (!col || !e.dataTransfer.types.includes('application/x-plankton-task')) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     root.querySelectorAll('.bcol.over').forEach((n) => n !== col && n.classList.remove('over'));
@@ -69,7 +69,7 @@ ${firstLine(descText(t)) ? `<div class="bc-desc">${esc(firstLine(descText(t), 12
   });
   root.addEventListener('drop', (e) => {
     const col = e.target.closest('.bcol');
-    const id = Number(e.dataTransfer.getData('application/x-planboard-task'));
+    const id = Number(e.dataTransfer.getData('application/x-plankton-task'));
     if (!col || !id) return;
     e.preventDefault();
     e.stopPropagation();
