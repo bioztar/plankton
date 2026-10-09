@@ -9,7 +9,8 @@ import { descText } from '../../util/sanitize.js';
 import { safeUrl } from '../../util/markdown.js';
 import { fmtDate, fmtVariance, statusSlug } from '../format.js';
 import { predsText, setTaskField, setPredsFromText } from '../../model/edit.js';
-import { moveRows, isTask } from '../../model/tree.js';
+import { isTask } from '../../model/tree.js';
+import { dropZone, edgeSpeed, applyRowMove } from './rowdrag.js';
 import { statusNames, priorityNames, optionColor, summaryStatus as rolledStatus } from '../../model/options.js';
 import { normRange, rangeSize, parseTSV, toTSV, cellText, pasteTargets, fillDownTargets, fillHandleTargets, applyCellEdits, skipSummary } from '../../model/cells.js';
 import { variance, isOverdue, statusDay } from '../../model/stats.js';
@@ -44,6 +45,8 @@ export function createGrid(app, root) {
   let cellDrag = null;
   let fillDrag = null;
   let fillPreview = null;
+  let drag = null; // row drag by the # cell
+  let autoScroll = 0; // px per frame while dragging near an edge
   let autoScrollX = 0;
 
   const rowH = () => app.rowH();
@@ -209,6 +212,7 @@ export function createGrid(app, root) {
       body.setAttribute('aria-activedescendant', `gc-${a.id}-${sec ? (a.col === 'num' ? 'num' : 'name') : a.col}`);
     }
     else body.removeAttribute('aria-activedescendant');
+    if (drag && drag.started) paintDrop();
   }
 
   let countsCache = null;
@@ -321,10 +325,10 @@ export function createGrid(app, root) {
     for (let acc = 0; c < cols.length - 1 && acc + widths[c] <= cx; c++) acc += widths[c];
     return { r, c };
   }
-  function edgeScroll(e) {
+  function edgeScroll(x, y, horizontal = true) {
     const sr = scroll.getBoundingClientRect();
-    autoScroll = e.clientY < sr.top + HEAD_H + 24 ? -1 : e.clientY > sr.bottom - 24 ? 1 : 0;
-    autoScrollX = e.clientX < sr.left + 24 ? -1 : e.clientX > sr.right - 24 ? 1 : 0;
+    autoScroll = edgeSpeed(y, sr.top + HEAD_H, sr.bottom, 36);
+    autoScrollX = horizontal ? edgeSpeed(x, sr.left, sr.right, 24) : 0;
   }
 
   // ---- editing -----------------------------------------------------------
@@ -346,7 +350,7 @@ export function createGrid(app, root) {
     }
   }
 
-  function startEdit(id, col, initial) {
+  function startEdit(id, col, initial, opts = {}) {
     const r = store.d.tree.byId.get(id);
     if (!r) return;
     if (!canEdit(r, col)) {
@@ -394,6 +398,14 @@ export function createGrid(app, root) {
     }
     input.focus();
     if (initial == null && input.select) input.select();
+    // Option list open straight away; needs the click / key press's user activation.
+    if (opts.pick && input.tagName === 'SELECT' && typeof input.showPicker === 'function') {
+      try {
+        input.showPicker();
+      } catch {
+        // no activation or unsupported: the focused select opens with Space / Alt+↓ / click
+      }
+    }
     input.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Enter') {
@@ -491,7 +503,10 @@ export function createGrid(app, root) {
       });
     };
     const doKey = (what) => {
-      if (what === 'edit') return startEdit(r.id, r.kind === 'section' ? 'name' : a.col);
+      if (what === 'edit') {
+        const c = colDef(a.col);
+        return startEdit(r.id, r.kind === 'section' ? 'name' : a.col, undefined, { pick: r.kind !== 'section' && !!c && c.edit === 'select' });
+      }
       if (what === 'open') return app.openCard(r.id);
       if (what === 'toggle-check') return toggleCheck(r.id, a.col);
       if (what === 'type') return startEdit(r.id, a.col, k);
@@ -574,16 +589,18 @@ export function createGrid(app, root) {
         }
         return app.toast('Grid released: Tab now moves focus out of the grid.', 'info', 2000);
       }
-      case ' ':
-        if (r && decide() === 'toggle-check') {
+      case ' ': {
+        const what = r ? decide() : null;
+        if (what === 'toggle-check' || what === 'edit') {
           handled();
-          return doKey('toggle-check');
+          return doKey(what);
         }
         if (r && (r.kind === 'section' || store.d.tree.isSummary(r.id))) {
           handled();
           return app.toggleCollapse(r.id);
         }
         return undefined;
+      }
       case 'ContextMenu':
         if (!r) return undefined;
         handled();
@@ -650,12 +667,19 @@ export function createGrid(app, root) {
       suppressClick = false;
       return;
     }
-    const rowEl = e.target.closest('.gr');
-    if (!rowEl || e.target.closest('.ed')) return;
-    if (e.target.closest('a[href]')) return;
+    let target = e.target;
+    // Closing an open editor on mousedown re-renders the rows, so the click can land
+    // on the rows container instead of the cell under the pointer.
+    if (!target.closest('.gr')) {
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      if (under && rowsEl.contains(under)) target = under;
+    }
+    const rowEl = target.closest('.gr');
+    if (!rowEl || target.closest('.ed')) return;
+    if (target.closest('a[href]')) return;
     const id = Number(rowEl.dataset.id);
-    const actEl = e.target.closest('[data-act]');
-    const cell = e.target.closest('[data-col]');
+    const actEl = target.closest('[data-act]');
+    const cell = target.closest('[data-col]');
     const act = actEl && actEl.dataset.act;
     if (act === 'toggle') return app.toggleCollapse(id);
     if (act === 'color') return app.sectionColor(id, actEl);
@@ -663,8 +687,14 @@ export function createGrid(app, root) {
     const r = store.d.tree.byId.get(id);
     const col = cell ? cell.dataset.col : 'name';
     const section = !!r && r.kind === 'section';
-    const what = clickAction({ detail: e.detail, act, editable: !store.readOnly && canEdit(r, section ? 'name' : col), section });
-    if (what === 'edit') return startEdit(id, section ? 'name' : col);
+    const c = colDef(col);
+    const editKind = c ? c.edit || null : null;
+    const what = clickAction({ detail: e.detail, act, editable: !store.readOnly && canEdit(r, section ? 'name' : col), section, editKind, extend: e.shiftKey || mod(e) });
+    if (what === 'edit') {
+      const pick = !section && editKind === 'select';
+      if (pick && e.detail === 1) app.select(id, { col, keepCard: true });
+      return startEdit(id, section ? 'name' : col, undefined, { pick });
+    }
     if (what === 'check') {
       if (e.detail > 1) return undefined;
       app.select(id, { col, keepCard: true });
@@ -791,9 +821,41 @@ export function createGrid(app, root) {
     head.querySelectorAll('.dragging').forEach((n) => n.classList.remove('dragging'));
   });
 
-  // drag rows by the # cell
-  let drag = null;
-  let autoScroll = 0;
+  // ---- drags: rows by the # cell, cell ranges, the fill handle ---------------
+  // While any of them is pending the grid body is user-select:none and
+  // selectstart is cancelled, so no native text selection runs alongside.
+  let lastPoint = null;
+  let ticker = 0;
+  let swallowNextClick = false; // a drag cancelled with Esc while the button is still down
+  const anyDrag = () => !!(drag || cellDrag || fillDrag);
+  const dragRunning = () => !!((drag && drag.started) || (cellDrag && cellDrag.started) || fillDrag);
+  function armDrag() {
+    const sel = window.getSelection && window.getSelection();
+    if (sel && sel.rangeCount) sel.removeAllRanges();
+    body.classList.add('no-select');
+  }
+  function disarm() {
+    if (anyDrag()) return;
+    body.classList.remove('no-select');
+    autoScroll = 0;
+    autoScrollX = 0;
+  }
+  function capture(e) {
+    try {
+      if (!body.hasPointerCapture(e.pointerId)) body.setPointerCapture(e.pointerId);
+    } catch {
+      // pointer already released
+    }
+  }
+  const afterDrag = () => {
+    suppressClick = true;
+    setTimeout(() => (suppressClick = false), 0);
+  };
+  body.addEventListener('selectstart', (e) => {
+    const el = e.target.nodeType === 1 ? e.target : e.target.parentElement;
+    if (anyDrag() && !(el && el.closest('.ed'))) e.preventDefault();
+  });
+
   rowsEl.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || e.target.closest('.ed')) return;
     if (e.target.closest('.fill-h')) {
@@ -801,86 +863,45 @@ export function createGrid(app, root) {
       const g = range();
       if (!g || store.readOnly) return;
       fillDrag = { g, to: g.r2 };
+      armDrag();
       body.classList.add('cell-drag');
+      capture(e);
+      return;
+    }
+    const num = e.target.closest('.c-num');
+    if (num) {
+      // the press would otherwise start a native text selection across the rows
+      e.preventDefault();
+      if (store.readOnly) return;
+      hideTip();
+      drag = { id: Number(num.closest('.gr').dataset.id), x: e.clientX, y: e.clientY, started: false, target: null, zone: null };
+      armDrag();
       return;
     }
     const cell = e.target.closest('[data-col]');
-    if (!cell || cell.classList.contains('c-num') || e.target.closest('[data-act], a[href]') || e.shiftKey || mod(e)) return;
+    if (!cell || e.target.closest('[data-act], a[href]') || e.shiftKey || mod(e)) return;
     const rowEl = cell.closest('.gr');
     cellDrag = { id: Number(rowEl.dataset.id), col: cell.dataset.col, started: false, last: null };
+    armDrag();
   });
-  rowsEl.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('.fill-h')) return;
-    const num = e.target.closest('.c-num');
-    if (!num || e.button !== 0 || store.readOnly) return;
-    hideTip();
-    const id = Number(num.closest('.gr').dataset.id);
-    drag = { id, x: e.clientX, y: e.clientY, started: false, target: null };
-  });
-  function dropTarget(clientY) {
-    const rect = body.getBoundingClientRect();
-    const h = rowH();
+  function dropTarget(clientX, clientY) {
+    // beside the grid (e.g. over the Gantt) there is no drop target: releasing there cancels
+    const sr = scroll.getBoundingClientRect();
+    if (clientX < sr.left || clientX > sr.right) return null;
     const vis = store.d.visible;
-    const y = clientY - rect.top;
-    const i = Math.max(0, Math.min(vis.length - 1, Math.floor(y / h)));
-    const r = vis[i];
-    if (!r || drag.moving.has(r.id)) return null;
-    const frac = (y - i * h) / h;
     const tree = store.d.tree;
-    let pos = frac < 0.3 ? 'before' : frac > 0.7 ? 'after' : isTask(r) ? 'inside' : 'after';
+    const y = clientY - body.getBoundingClientRect().top;
+    const z = dropZone(y, rowH(), vis.length, (i) => isTask(vis[i]), drag.zone);
+    drag.zone = z;
+    const r = z && vis[z.i];
+    if (!r || drag.moving.has(r.id)) return null;
+    let pos = z.zone;
     if (pos === 'after' && isTask(r) && tree.isSummary(r.id) && !r.collapsed) pos = 'firstchild';
     if (pos === 'after' && !isTask(r) && !r.collapsed) pos = 'before-next';
-    return { r, i, pos };
+    return { r, i: z.i, pos };
   }
-  window.addEventListener('pointermove', (e) => {
-    if (fillDrag) {
-      edgeScroll(e);
-      const { r } = cellAt(e.clientX, e.clientY);
-      const to = Math.max(fillDrag.g.r2, r);
-      if (to === fillDrag.to) return;
-      fillDrag.to = to;
-      fillPreview = to > fillDrag.g.r2 ? { r1: fillDrag.g.r2 + 1, r2: to, c1: fillDrag.g.c1, c2: fillDrag.g.c2 } : null;
-      renderWindow(true);
-      return;
-    }
-    if (cellDrag) {
-      if (!(e.buttons & 1)) {
-        cellDrag = null;
-        return;
-      }
-      const { r, c } = cellAt(e.clientX, e.clientY);
-      const vis = store.d.visible;
-      const key = cols[c] ? cols[c].key : 'name';
-      const here = `${r}:${key}`;
-      if (!cellDrag.started) {
-        if (!vis[r] || (vis[r].id === cellDrag.id && (key === cellDrag.col || vis[r].kind === 'section'))) return;
-        cellDrag.started = true;
-        if (window.getSelection) window.getSelection().removeAllRanges();
-        body.classList.add('cell-drag');
-        app.select(cellDrag.id, { col: cellDrag.col, keepCard: true });
-        body.focus({ preventScroll: true });
-      }
-      edgeScroll(e);
-      if (here === cellDrag.last || !vis[r]) return;
-      cellDrag.last = here;
-      app.select(vis[r].id, { extend: true, col: key, keepCard: true });
-      return;
-    }
-    if (!drag) return;
-    if (!drag.started) {
-      if (Math.abs(e.clientY - drag.y) + Math.abs(e.clientX - drag.x) < 6) return;
-      drag.started = true;
-      if (!store.selection.has(drag.id)) app.select(drag.id, { keepCard: true });
-      const ids = [...store.selection];
-      const tree = store.d.tree;
-      const moving = new Set(ids);
-      for (const id of ids) if (isTask(tree.byId.get(id))) for (const dd of descendantsOf(tree, id)) moving.add(dd);
-      drag.ids = ids;
-      drag.moving = moving;
-      root.classList.add('dragging');
-    }
-    const t = dropTarget(e.clientY);
-    drag.target = t;
+  function paintDrop() {
+    const t = drag && drag.started ? drag.target : null;
     rowsEl.querySelectorAll('.drop-in').forEach((n) => n.classList.remove('drop-in'));
     if (!t) {
       dropLine.hidden = true;
@@ -895,75 +916,167 @@ export function createGrid(app, root) {
       dropLine.style.top = `${(t.pos === 'before' ? t.i : t.i + 1) * h - 1}px`;
       dropLine.style.left = `${(cols[0] ? cols[0].width : 0) + lvl * 18 + 16}px`;
     }
-    const sr = scroll.getBoundingClientRect();
-    autoScroll = e.clientY < sr.top + HEAD_H + 24 ? -1 : e.clientY > sr.bottom - 24 ? 1 : 0;
+  }
+  /** Follow the pointer (also called after an auto-scroll step with the last position). */
+  function dragTo(x, y) {
+    if (fillDrag) {
+      const { r } = cellAt(x, y);
+      const to = Math.max(fillDrag.g.r2, r);
+      if (to === fillDrag.to) return;
+      fillDrag.to = to;
+      fillPreview = to > fillDrag.g.r2 ? { r1: fillDrag.g.r2 + 1, r2: to, c1: fillDrag.g.c1, c2: fillDrag.g.c2 } : null;
+      renderWindow(true);
+      return;
+    }
+    if (cellDrag && cellDrag.started) {
+      const { r, c } = cellAt(x, y);
+      const vis = store.d.visible;
+      const key = cols[c] ? cols[c].key : 'name';
+      const here = `${r}:${key}`;
+      if (here === cellDrag.last || !vis[r]) return;
+      cellDrag.last = here;
+      app.select(vis[r].id, { extend: true, col: key, keepCard: true });
+      return;
+    }
+    if (drag && drag.started) {
+      const t = dropTarget(x, y);
+      const prev = drag.target;
+      drag.target = t;
+      if (!t || !prev || t.r !== prev.r || t.pos !== prev.pos) paintDrop();
+    }
+  }
+  function startTicker() {
+    if (ticker) return;
+    const step = () => {
+      ticker = 0;
+      if (!dragRunning()) return;
+      const top = scroll.scrollTop;
+      const left = scroll.scrollLeft;
+      if (autoScroll) scroll.scrollTop = top + autoScroll;
+      if (autoScrollX && !drag) scroll.scrollLeft = left + autoScrollX;
+      if (lastPoint && (scroll.scrollTop !== top || scroll.scrollLeft !== left)) {
+        renderWindow();
+        dragTo(lastPoint.x, lastPoint.y);
+      }
+      ticker = requestAnimationFrame(step);
+    };
+    ticker = requestAnimationFrame(step);
+  }
+  window.addEventListener('pointermove', (e) => {
+    if (!anyDrag()) return;
+    if (!(e.buttons & 1)) {
+      // the release happened where we could not see it (e.g. outside the window)
+      endCellDrag(true);
+      endDrag(true);
+      return;
+    }
+    lastPoint = { x: e.clientX, y: e.clientY };
+    if (fillDrag) {
+      edgeScroll(e.clientX, e.clientY);
+      startTicker();
+      dragTo(e.clientX, e.clientY);
+      return;
+    }
+    if (cellDrag) {
+      if (!cellDrag.started) {
+        const { r, c } = cellAt(e.clientX, e.clientY);
+        const vis = store.d.visible;
+        const key = cols[c] ? cols[c].key : 'name';
+        if (!vis[r] || (vis[r].id === cellDrag.id && (key === cellDrag.col || vis[r].kind === 'section'))) return;
+        cellDrag.started = true;
+        armDrag();
+        body.classList.add('cell-drag');
+        capture(e);
+        app.select(cellDrag.id, { col: cellDrag.col, keepCard: true });
+        body.focus({ preventScroll: true });
+      }
+      edgeScroll(e.clientX, e.clientY);
+      startTicker();
+      dragTo(e.clientX, e.clientY);
+      return;
+    }
+    if (!drag.started) {
+      if (Math.abs(e.clientY - drag.y) + Math.abs(e.clientX - drag.x) < 6) return;
+      drag.started = true;
+      armDrag();
+      capture(e);
+      if (!store.selection.has(drag.id)) app.select(drag.id, { keepCard: true });
+      const ids = [...store.selection];
+      const tree = store.d.tree;
+      const moving = new Set(ids);
+      for (const id of ids) if (isTask(tree.byId.get(id))) for (const dd of descendantsOf(tree, id)) moving.add(dd);
+      drag.ids = ids;
+      drag.moving = moving;
+      root.classList.add('dragging');
+      body.focus({ preventScroll: true });
+    }
+    edgeScroll(e.clientX, e.clientY, false);
+    startTicker();
+    dragTo(e.clientX, e.clientY);
   });
-  setInterval(() => {
-    const on = (drag && drag.started) || (cellDrag && cellDrag.started) || fillDrag;
-    if (!on) return;
-    if (autoScroll) scroll.scrollTop += autoScroll * 14;
-    if (autoScrollX && !drag) scroll.scrollLeft += autoScrollX * 14;
-  }, 30);
   function endCellDrag(cancel) {
     body.classList.remove('cell-drag');
-    autoScroll = 0;
-    autoScrollX = 0;
     if (fillDrag) {
       const { g, to } = fillDrag;
       fillDrag = null;
       fillPreview = null;
-      suppressClick = true;
-      setTimeout(() => (suppressClick = false), 0);
+      disarm();
+      afterDrag();
       if (cancel || to <= g.r2) return renderWindow(true);
       return applyCells('Fill', fromCells(fillHandleTargets(g, to)), { r1: g.r1, c1: g.c1, r2: to, c2: g.c2 });
     }
     if (cellDrag) {
       const started = cellDrag.started;
       cellDrag = null;
-      if (started) {
-        suppressClick = true;
-        setTimeout(() => (suppressClick = false), 0);
-      }
+      if (started) afterDrag();
     }
+    disarm();
     return undefined;
   }
-  const endDrag = (e, cancel) => {
-    if (!drag) return;
+  function endDrag(cancel) {
+    if (!drag) return undefined;
     const d = drag;
     drag = null;
-    autoScroll = 0;
+    disarm();
     dropLine.hidden = true;
+    rowsEl.querySelectorAll('.drop-in').forEach((n) => n.classList.remove('drop-in'));
     root.classList.remove('dragging');
-    if (!d.started) return;
-    suppressClick = true;
-    setTimeout(() => (suppressClick = false), 0);
+    if (!d.started) return undefined;
+    afterDrag();
     if (cancel || !d.target) return renderWindow(true);
     const { r, pos } = d.target;
-    store.commit('Move rows', (plan) => {
-      let targetId = r.id;
-      let p = pos;
-      if (p === 'before-next') {
-        p = 'after';
-      }
-      const next = moveRows(plan.rows, d.ids, targetId, p);
-      if (!next) return false;
-      plan.rows = next;
-      return undefined;
-    });
+    store.commit('Move rows', (plan) => applyRowMove(plan, d.ids, r.id, pos));
     return undefined;
-  };
-  window.addEventListener('pointerup', (e) => {
+  }
+  window.addEventListener('pointerup', () => {
+    if (swallowNextClick) {
+      swallowNextClick = false;
+      afterDrag();
+    }
     endCellDrag(false);
-    endDrag(e, false);
+    endDrag(false);
   });
-  window.addEventListener('pointercancel', (e) => {
+  window.addEventListener('pointercancel', () => {
     endCellDrag(true);
-    endDrag(e, true);
+    endDrag(true);
   });
-  window.addEventListener('keydown', (e) => {
-    if (drag && drag.started && e.key === 'Escape') endDrag(e, true);
-    if (fillDrag && e.key === 'Escape') endCellDrag(true);
+  window.addEventListener('blur', () => {
+    endCellDrag(true);
+    endDrag(true);
   });
+  // capture phase: Esc ends the drag and must not also release the grid / close the card
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (e.key !== 'Escape' || !dragRunning()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      swallowNextClick = true;
+      endCellDrag(true);
+      endDrag(true);
+    },
+    true
+  );
 
   // column resize
   head.addEventListener('pointerdown', (e) => {

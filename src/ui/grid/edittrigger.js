@@ -9,8 +9,10 @@ const ACTS = { toggle: 'toggle', color: 'color', 'sec-menu': 'sec-menu', card: '
  * first click re-rendered the row, so double-click editing does not depend on the
  * separate `dblclick` event (which Chrome drops when the target node was replaced).
  */
-export function clickAction({ detail = 1, act = null, editable = false, section = false } = {}) {
+export function clickAction({ detail = 1, act = null, editable = false, section = false, editKind = null, extend = false } = {}) {
   if (act && ACTS[act]) return ACTS[act];
+  // Status / Priority / single-select: one click opens the option list (Shift / Cmd extend the selection).
+  if (detail === 1 && editable && !section && !extend && editKind === 'select') return 'edit';
   if (detail === 2) return editable ? 'edit' : section ? 'select' : 'open';
   return 'select';
 }
@@ -19,7 +21,8 @@ export function clickAction({ detail = 1, act = null, editable = false, section 
  * A key press on the selected cell (grid focused, not editing).
  * Returns 'edit' | 'type' (start editing with the typed character) | 'open' |
  * 'toggle-check' | null (not handled here).
- * Enter opens details from the Task name / # cells (and read-only cells), edits other cells;
+ * Enter opens details from the Task name / # cells (and read-only cells), edits other cells
+ * (Enter / Space on a select cell open its option list);
  * Shift+Enter always opens details; F2 always edits.
  */
 export function keyAction({ key, mod = false, alt = false, shift = false, col = 'name', editable = false, editKind = 'text', section = false } = {}) {
@@ -31,6 +34,7 @@ export function keyAction({ key, mod = false, alt = false, shift = false, col = 
     return editKind === 'checkbox' ? 'toggle-check' : 'edit';
   }
   if (key === ' ' && editable && editKind === 'checkbox' && !section) return 'toggle-check';
+  if (key === ' ' && editable && editKind === 'select' && !section && !mod && !alt) return 'edit';
   if (key.length === 1 && key !== ' ' && !mod && !alt && editable && !section && editKind === 'text') return 'type';
   if (key.length === 1 && key === ' ' && !mod && !alt && editable && !section && editKind === 'text') return 'type';
   return null;
