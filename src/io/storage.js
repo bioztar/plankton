@@ -2,17 +2,83 @@
 // store is injectable so this module stays testable in Node.
 import { normalizePlan, serializePlan } from '../model/plan.js';
 
-const PREFIX = 'planboard:';
+const PREFIX = 'plankton:';
 const INDEX = PREFIX + 'index';
 const PREFS = PREFIX + 'prefs';
+/** Keys written by planboard 1.x (the app's former name). */
+export const LEGACY_PREFIX = 'planboard:';
 
-function memoryStore() {
+export function memoryStore() {
   const m = new Map();
   return {
     getItem: (k) => (m.has(k) ? m.get(k) : null),
     setItem: (k, v) => m.set(k, String(v)),
     removeItem: (k) => m.delete(k),
+    key: (i) => [...m.keys()][i] ?? null,
+    get length() {
+      return m.size;
+    },
   };
+}
+
+function legacyKeys(store) {
+  const keys = new Set();
+  try {
+    for (let i = 0; i < store.length; i++) {
+      const k = store.key(i);
+      if (typeof k === 'string' && k.startsWith(LEGACY_PREFIX)) keys.add(k);
+    }
+  } catch (e) {
+    /* store cannot enumerate: fall back to the legacy index */
+  }
+  try {
+    const idx = JSON.parse(store.getItem(LEGACY_PREFIX + 'index') || 'null');
+    if (idx && Array.isArray(idx.plans)) for (const p of idx.plans) if (p && typeof p.id === 'string') keys.add(LEGACY_PREFIX + 'plan:' + p.id);
+  } catch (e) {
+    /* unreadable index */
+  }
+  for (const k of ['index', 'prefs']) keys.add(LEGACY_PREFIX + k);
+  keys.delete(LEGACY_PREFIX + 'probe');
+  return [...keys];
+}
+
+/**
+ * One-time upgrade from planboard 1.x: while this browser has no PLANkton index
+ * yet, copy every `planboard:*` key (plans, index, prefs such as theme and author
+ * name) to `plankton:*`. Existing new keys are never overwritten and the old keys
+ * are kept, so an older planboard file still finds its data. When storage is too
+ * full for a copy, that key is moved instead. The index is written last, so an
+ * interrupted migration is retried on the next load. Returns the keys migrated.
+ */
+export function migrateLegacyStorage(store) {
+  try {
+    if (store.getItem(INDEX) != null) return 0;
+    const keys = legacyKeys(store).filter((k) => store.getItem(k) != null);
+    if (!keys.length) return 0;
+    const idx = LEGACY_PREFIX + 'index';
+    keys.sort((a, b) => (a === idx) - (b === idx));
+    let n = 0;
+    for (const k of keys) {
+      const nk = PREFIX + k.slice(LEGACY_PREFIX.length);
+      if (store.getItem(nk) != null) continue;
+      const v = store.getItem(k);
+      try {
+        store.setItem(nk, v);
+      } catch (e) {
+        store.removeItem(k);
+        try {
+          store.setItem(nk, v);
+        } catch (e2) {
+          store.setItem(k, v);
+          continue;
+        }
+      }
+      n++;
+    }
+    return n;
+  } catch (e) {
+    return 0;
+  }
 }
 
 export function defaultStore() {
@@ -28,6 +94,7 @@ export function defaultStore() {
 }
 
 export function createStorage(store = memoryStore()) {
+  migrateLegacyStorage(store);
   const readJSON = (k, dflt) => {
     try {
       const v = store.getItem(k);

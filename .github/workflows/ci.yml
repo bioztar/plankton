@@ -20,7 +20,7 @@ jobs:
       - name: Fail if dist/ is stale
         run: |
           if ! git diff --exit-code --stat -- dist/; then
-            echo "::error::dist/ is out of date. Run 'npm run build' and commit dist/planboard.html."
+            echo "::error::dist/ is out of date. Run 'npm run build' and commit dist/plankton.html."
             exit 1
           fi
           if [ -n "$(git status --porcelain -- dist/)" ]; then

@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="color-scheme" content="light dark">
-<meta name="generator" content="planboard 1.4.0">
-<title>Planboard</title>
+<meta name="generator" content="PLANkton 1.5.0">
+<title>PLANkton</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%20width%3D%2264%22%20height%3D%2264%22%3E%0A%20%20%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2214%22%20fill%3D%22%232b5fd4%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2232%22%20cy%3D%2232%22%20r%3D%2224%22%20fill%3D%22none%22%20stroke%3D%22%23ffffff%22%20stroke-width%3D%224%22%2F%3E%0A%20%20%3Cg%20fill%3D%22%23ffffff%22%3E%0A%20%20%20%20%3Crect%20x%3D%2217%22%20y%3D%2221%22%20width%3D%2218%22%20height%3D%226%22%20rx%3D%223%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2225%22%20y%3D%2229%22%20width%3D%2222%22%20height%3D%226%22%20rx%3D%223%22%2F%3E%0A%20%20%20%20%3Crect%20x%3D%2220%22%20y%3D%2237%22%20width%3D%2214%22%20height%3D%226%22%20rx%3D%223%22%2F%3E%0A%20%20%3C%2Fg%3E%0A%3C%2Fsvg%3E">
 <style>/* ---- base.css */
 :root {
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -274,6 +275,12 @@ dialog::backdrop { background: rgba(10, 15, 25, 0.45); }
 .vp-ms { position: absolute; top: 5px; width: 10px; height: 10px; margin-left: -5px; transform: rotate(45deg); background: var(--milestone); }
 .vp-ms.done { background: var(--done-bar); }
 
+.about { display: flex; gap: 14px; align-items: center; margin-bottom: 8px; }
+.about-mark svg { display: block; width: 56px; height: 56px; }
+.about-name { font-size: 20px; margin: 0 0 4px; }
+.about-name b { font-weight: 800; }
+.about-ver { font-size: 13px; color: var(--muted); }
+
 /* ---- gantt.css */
 .gt-scroll { height: 100%; overflow: auto; position: relative; background: var(--bg); }
 .gt-head { position: sticky; top: 0; z-index: 3; height: 44px; }
@@ -404,7 +411,10 @@ dialog::backdrop { background: rgba(10, 15, 25, 0.45); }
 .banner { display: flex; align-items: center; gap: 10px; padding: 6px 12px; font-size: 13px; border-bottom: 1px solid var(--warn); background: color-mix(in srgb, var(--warn) 14%, var(--bg)); }
 .banner[hidden] { display: none; }
 .banner-text { font-weight: 600; }
-.brand { font-size: 22px; color: var(--accent); line-height: 1; }
+.brand { display: flex; align-items: center; gap: 6px; color: var(--accent); line-height: 1; }
+.brand-mark svg { display: block; width: 30px; height: 30px; }
+.brand-name { font-size: 15px; color: var(--fg); letter-spacing: 0.2px; white-space: nowrap; }
+.brand-name b { font-weight: 800; }
 .plan-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .pm-row1 { display: flex; align-items: center; gap: 6px; }
 .plan-name { font-size: 17px; font-weight: 700; border-color: transparent; background: transparent; width: 26ch; padding: 2px 6px; }
@@ -461,6 +471,7 @@ body.drop-on::after {
 .readonly .edit-only, .presenter .edit-only { display: none !important; }
 .view-board-on .plan-only, .view-logs-on .plan-only, .view-logs-on .filters { display: none !important; }
 @media (max-width: 900px) {
+  .brand-name { display: none; }
   .stats { margin-left: 0; }
   .filters { margin-left: 0; }
 }
@@ -526,9 +537,21 @@ body.presenter { font-size: 15px; }
 <script type="application/json" id="pb-data">null</script>
 </head>
 <body>
-<noscript><p style="padding:2em;font:16px sans-serif">Planboard needs JavaScript. Please enable it and reload this file.</p></noscript>
+<noscript><p style="padding:2em;font:16px sans-serif">PLANkton needs JavaScript. Please enable it and reload this file.</p></noscript>
 <div id="app"></div>
 <div id="print-root"></div>
+<template id="brand-mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="PLANkton">
+  <circle cx="32" cy="32" r="27" fill="#2b5fd4" fill-opacity="0.1" stroke="#2b5fd4" stroke-width="4"/>
+  <g fill="#2b5fd4">
+    <circle cx="32" cy="10.5" r="1.8"/><circle cx="42.75" cy="13.4" r="1.8"/><circle cx="50.6" cy="21.25" r="1.8"/>
+    <circle cx="53.5" cy="32" r="1.8"/><circle cx="50.6" cy="42.75" r="1.8"/><circle cx="42.75" cy="50.6" r="1.8"/>
+    <circle cx="32" cy="53.5" r="1.8"/><circle cx="21.25" cy="50.6" r="1.8"/><circle cx="13.4" cy="42.75" r="1.8"/>
+    <circle cx="10.5" cy="32" r="1.8"/><circle cx="13.4" cy="21.25" r="1.8"/><circle cx="21.25" cy="13.4" r="1.8"/>
+    <rect x="18" y="22.5" width="17" height="5" rx="2.5"/>
+    <rect x="25" y="29.5" width="21" height="5" rx="2.5"/>
+    <rect x="21" y="36.5" width="13" height="5" rx="2.5"/>
+  </g>
+</svg></template>
 <script>(() => {
 'use strict';
 // ---- ui/dom.js
@@ -3215,7 +3238,7 @@ function createPlan(fields = {}) {
   const stamp = nowStamp();
   return {
     schema: SCHEMA_VERSION,
-    app: 'planboard',
+    app: 'plankton',
     id: uid(),
     name: 'Untitled plan',
     owner: '',
@@ -3339,7 +3362,7 @@ function normLog(list, kind) {
  */
 function normalizePlan(input, report) {
   if (!input || typeof input !== 'object' || !Array.isArray(input.rows)) {
-    throw new Error('Not a planboard plan (missing "rows").');
+    throw new Error('Not a PLANkton plan (missing "rows").');
   }
   const base = createPlan();
   const plan = {
@@ -3703,9 +3726,11 @@ const { normalizePlan, serializePlan } = __model_plan;
 // store is injectable so this module stays testable in Node.
 
 
-const PREFIX = 'planboard:';
+const PREFIX = 'plankton:';
 const INDEX = PREFIX + 'index';
 const PREFS = PREFIX + 'prefs';
+/** Keys written by planboard 1.x (the app's former name). */
+const LEGACY_PREFIX = 'planboard:';
 
 function memoryStore() {
   const m = new Map();
@@ -3713,7 +3738,71 @@ function memoryStore() {
     getItem: (k) => (m.has(k) ? m.get(k) : null),
     setItem: (k, v) => m.set(k, String(v)),
     removeItem: (k) => m.delete(k),
+    key: (i) => [...m.keys()][i] ?? null,
+    get length() {
+      return m.size;
+    },
   };
+}
+
+function legacyKeys(store) {
+  const keys = new Set();
+  try {
+    for (let i = 0; i < store.length; i++) {
+      const k = store.key(i);
+      if (typeof k === 'string' && k.startsWith(LEGACY_PREFIX)) keys.add(k);
+    }
+  } catch (e) {
+    /* store cannot enumerate: fall back to the legacy index */
+  }
+  try {
+    const idx = JSON.parse(store.getItem(LEGACY_PREFIX + 'index') || 'null');
+    if (idx && Array.isArray(idx.plans)) for (const p of idx.plans) if (p && typeof p.id === 'string') keys.add(LEGACY_PREFIX + 'plan:' + p.id);
+  } catch (e) {
+    /* unreadable index */
+  }
+  for (const k of ['index', 'prefs']) keys.add(LEGACY_PREFIX + k);
+  keys.delete(LEGACY_PREFIX + 'probe');
+  return [...keys];
+}
+
+/**
+ * One-time upgrade from planboard 1.x: while this browser has no PLANkton index
+ * yet, copy every `planboard:*` key (plans, index, prefs such as theme and author
+ * name) to `plankton:*`. Existing new keys are never overwritten and the old keys
+ * are kept, so an older planboard file still finds its data. When storage is too
+ * full for a copy, that key is moved instead. The index is written last, so an
+ * interrupted migration is retried on the next load. Returns the keys migrated.
+ */
+function migrateLegacyStorage(store) {
+  try {
+    if (store.getItem(INDEX) != null) return 0;
+    const keys = legacyKeys(store).filter((k) => store.getItem(k) != null);
+    if (!keys.length) return 0;
+    const idx = LEGACY_PREFIX + 'index';
+    keys.sort((a, b) => (a === idx) - (b === idx));
+    let n = 0;
+    for (const k of keys) {
+      const nk = PREFIX + k.slice(LEGACY_PREFIX.length);
+      if (store.getItem(nk) != null) continue;
+      const v = store.getItem(k);
+      try {
+        store.setItem(nk, v);
+      } catch (e) {
+        store.removeItem(k);
+        try {
+          store.setItem(nk, v);
+        } catch (e2) {
+          store.setItem(k, v);
+          continue;
+        }
+      }
+      n++;
+    }
+    return n;
+  } catch (e) {
+    return 0;
+  }
 }
 
 function defaultStore() {
@@ -3729,6 +3818,7 @@ function defaultStore() {
 }
 
 function createStorage(store = memoryStore()) {
+  migrateLegacyStorage(store);
   const readJSON = (k, dflt) => {
     try {
       const v = store.getItem(k);
@@ -3798,7 +3888,7 @@ function createStorage(store = memoryStore()) {
   };
   return api;
 }
-return { defaultStore, createStorage };
+return { LEGACY_PREFIX, memoryStore, migrateLegacyStorage, defaultStore, createStorage };
 })();
 
 // ---- model/sample.js
@@ -4247,8 +4337,8 @@ function extractPayload(html) {
  */
 function buildPayload(plan, { presenter = false, at = new Date().toISOString(), history = null } = {}) {
   const data = JSON.parse(serializePlan(plan, false));
-  if (presenter) return { app: 'planboard', mode: 'presenter', readOnly: true, presenter: true, exportedAt: at, plan: data };
-  const out = { app: 'planboard', mode: 'edit', readOnly: false, presenter: false, savedAt: at, plan: data };
+  if (presenter) return { app: 'plankton', mode: 'presenter', readOnly: true, presenter: true, exportedAt: at, plan: data };
+  const out = { app: 'plankton', mode: 'edit', readOnly: false, presenter: false, savedAt: at, plan: data };
   if (history && history.length) out.history = history;
   return out;
 }
@@ -4700,7 +4790,7 @@ async function ensurePermission(h) {
   }
 }
 
-const PICKER_TYPES = [{ description: 'Planboard plan (HTML)', accept: { 'text/html': ['.html', '.htm'] } }];
+const PICKER_TYPES = [{ description: 'PLANkton plan (HTML)', accept: { 'text/html': ['.html', '.htm'] } }];
 
 /**
  * env: { showSaveFilePicker (null when unsupported), registry, href, download(name, text),
@@ -4789,7 +4879,7 @@ function createFileSaver(env) {
         if (!o.saveAs && env.explain && !(await env.explain())) return { status: 'cancelled' };
         picked = true;
         try {
-          h = await env.showSaveFilePicker({ suggestedName: o.suggestedName, types: PICKER_TYPES, id: 'planboard' });
+          h = await env.showSaveFilePicker({ suggestedName: o.suggestedName, types: PICKER_TYPES, id: 'plankton' });
         } catch (e) {
           if (e && e.name === 'AbortError') return { status: 'cancelled' };
           return fallback(o, 'picker');
@@ -4825,14 +4915,22 @@ return { initialSaveState, saveReducer, hasUnsaved, saveStatusText, pageKey, han
 const __io_idb = (() => {
 
 // Minimal promise wrapper over one IndexedDB object store (key -> structured-cloneable value).
-function idbKV(dbName = 'planboard', storeName = 'kv') {
+const DB_NAME = 'plankton';
+/** IndexedDB database of planboard 1.x (remembered Save file handles). */
+const LEGACY_DB_NAME = 'planboard';
+
+/** `create: false` opens an existing database only (never creates an empty one). */
+function idbKV(dbName = DB_NAME, storeName = 'kv', { create = true } = {}) {
   let dbp = null;
   const open = () =>
     dbp ||
     (dbp = new Promise((resolve, reject) => {
       if (typeof indexedDB === 'undefined') throw new Error('IndexedDB unavailable');
       const r = indexedDB.open(dbName, 1);
-      r.onupgradeneeded = () => r.result.createObjectStore(storeName);
+      r.onupgradeneeded = () => {
+        if (!create) return r.transaction.abort();
+        r.result.createObjectStore(storeName);
+      };
       r.onsuccess = () => resolve(r.result);
       r.onerror = () => reject(r.error);
     }));
@@ -4853,7 +4951,44 @@ function idbKV(dbName = 'planboard', storeName = 'kv') {
     del: (k) => run('readwrite', (s) => s.delete(k)),
   };
 }
-return { idbKV };
+
+/**
+ * A kv store that falls back to `legacy` (planboard 1.x) for keys it does not
+ * have yet, copying a found value into the new store. Deletes clear both, so a
+ * forgotten value cannot come back from the old store. Legacy failures are ignored.
+ */
+function withLegacyKV(kv, legacy) {
+  return {
+    async get(k) {
+      const v = await kv.get(k);
+      if (v != null || !legacy) return v;
+      let old;
+      try {
+        old = await legacy.get(k);
+      } catch (e) {
+        return v;
+      }
+      if (old == null) return v;
+      try {
+        await kv.set(k, old);
+      } catch (e) {
+        /* still usable this session */
+      }
+      return old;
+    },
+    set: (k, v) => kv.set(k, v),
+    async del(k) {
+      await kv.del(k);
+      if (!legacy) return;
+      try {
+        await legacy.del(k);
+      } catch (e) {
+        /* ignore */
+      }
+    },
+  };
+}
+return { DB_NAME, LEGACY_DB_NAME, idbKV, withLegacyKV };
 })();
 
 // ---- ui/gantt/scale.js
@@ -6545,7 +6680,7 @@ function createGrid(app, root) {
     if (!h) return;
     colDrag = h.dataset.col;
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('application/x-planboard-col', colDrag);
+    e.dataTransfer.setData('application/x-plankton-col', colDrag);
     h.classList.add('dragging');
   });
   const dropSpot = (e) => {
@@ -8049,7 +8184,7 @@ ${firstLine(descText(t)) ? `<div class="bc-desc">${esc(firstLine(descText(t), 12
     const c = e.target.closest('.bcard');
     if (!c) return;
     e.dataTransfer.setData('text/plain', c.dataset.id);
-    e.dataTransfer.setData('application/x-planboard-task', c.dataset.id);
+    e.dataTransfer.setData('application/x-plankton-task', c.dataset.id);
     e.dataTransfer.effectAllowed = 'move';
     c.classList.add('dragging');
   });
@@ -8060,7 +8195,7 @@ ${firstLine(descText(t)) ? `<div class="bc-desc">${esc(firstLine(descText(t), 12
   });
   root.addEventListener('dragover', (e) => {
     const col = e.target.closest('.bcol');
-    if (!col || !e.dataTransfer.types.includes('application/x-planboard-task')) return;
+    if (!col || !e.dataTransfer.types.includes('application/x-plankton-task')) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     root.querySelectorAll('.bcol.over').forEach((n) => n !== col && n.classList.remove('over'));
@@ -8068,7 +8203,7 @@ ${firstLine(descText(t)) ? `<div class="bc-desc">${esc(firstLine(descText(t), 12
   });
   root.addEventListener('drop', (e) => {
     const col = e.target.closest('.bcol');
-    const id = Number(e.dataTransfer.getData('application/x-planboard-task'));
+    const id = Number(e.dataTransfer.getData('application/x-plankton-task'));
     if (!col || !id) return;
     e.preventDefault();
     e.stopPropagation();
@@ -9312,7 +9447,7 @@ const { toCSV } = __io_csv;
 const { embedPayload, extractPayload, resolveBoot, buildPayload, payloadStamp } = __io_standalone;
 const { normHistory, makeVersion, appendVersion, mergeHistories, decodeSnapshot, replacePlanContents } = __io_versions;
 const { createFileSaver, createHandleRegistry, initialSaveState, saveReducer, hasUnsaved, saveStatusText, suggestedFileName } = __io_filesave;
-const { idbKV } = __io_idb;
+const { idbKV, withLegacyKV, LEGACY_DB_NAME } = __io_idb;
 const { escapeHtml: esc } = __util_escape;
 const { GANTT_CSS } = __ui_gantt_render;
 const { createGrid } = __ui_grid_grid;
@@ -9370,10 +9505,14 @@ const VIEWS = ['plan', 'board', 'logs'];
 const THEMES = ['auto', 'light', 'dark'];
 const UI = { undo: false, touch: false, schedule: false, allowReadOnly: true };
 const K = isMac ? '⌘' : 'Ctrl';
+const APP_NAME = 'PLANkton';
+const appVersion = () => ((document.querySelector('meta[name="generator"]') || {}).content || '').split(' ')[1] || '';
+/** The header mark: docs/brand/plankton-mark.svg, inlined by the build. */
+const brandMark = () => (document.getElementById('brand-mark') || {}).innerHTML || '';
 
 function layoutHTML() {
   return `<header class="top">
-<div class="brand" aria-hidden="true">▦</div>
+<div class="brand" title="${APP_NAME} ${appVersion()}"><span class="brand-mark" aria-hidden="true">${brandMark()}</span><span class="brand-name"><b>PLAN</b>kton</span></div>
 <div class="plan-meta">
   <div class="pm-row1"><input class="plan-name" aria-label="Plan name" maxlength="200"><button type="button" class="btn ic edit-only" data-act="plans" aria-haspopup="menu" aria-label="Switch or manage plans" title="Plans">▾</button><span class="ro-badge">Read-only</span><span class="save-state" aria-live="polite"></span></div>
   <div class="pm-row2">
@@ -9869,12 +10008,14 @@ function boot(sourceHtml) {
     const lower = name.toLowerCase();
     if (/\.(csv|tsv|txt)$/.test(lower)) return openPasteImport(app, text);
     let p;
+    let fileHistory = [];
     const report = {};
     try {
       if (/\.html?$/.test(lower) || /^\s*</.test(text)) {
         const payload = extractPayload(text);
         if (!payload || !payload.plan) throw new Error('this HTML file has no embedded plan');
         p = normalizePlan(payload.plan, report);
+        fileHistory = normHistory(payload.history);
       } else p = parsePlanJSON(text, report);
     } catch (e) {
       return toast(`Import failed: ${e.message}`, 'error', 7000);
@@ -9891,6 +10032,13 @@ function boot(sourceHtml) {
         p.id = uid();
         p.name = `${p.name} (imported)`.slice(0, 200);
       }
+    }
+    // A saved .html (also from planboard 1.x) brings its version history along,
+    // so Save as… over the old file keeps every version.
+    if (fileHistory.length) {
+      const hist = historyFor(p.id);
+      hist.list = mergeHistories(hist.list, fileHistory);
+      hist.base = plainPlan(p);
     }
     addPlan(p);
     toast(`Imported “${p.name}”.${droppedNote(report)}`, report.droppedLinks.length ? 'warn' : 'info', 6000);
@@ -9910,7 +10058,7 @@ function boot(sourceHtml) {
   const pickerFn = typeof window.showSaveFilePicker === 'function' ? (o) => window.showSaveFilePicker(o) : null;
   const saver = createFileSaver({
     showSaveFilePicker: pickerFn,
-    registry: createHandleRegistry(idbKV()),
+    registry: createHandleRegistry(withLegacyKV(idbKV(), idbKV(LEGACY_DB_NAME, 'kv', { create: false }))),
     href: location.href,
     download: (name, html) => download(name, html, 'text/html;charset=utf-8'),
     confirm: confirmOverwrite,
@@ -10018,7 +10166,7 @@ function boot(sourceHtml) {
     if (typeof window.showOpenFilePicker !== 'function') return toast('This browser cannot write to files: use Edge or Chrome. Save downloads an updated copy instead.', 'warn', 7000);
     let h;
     try {
-      [h] = await window.showOpenFilePicker({ types: [{ description: 'Planboard plan (HTML)', accept: { 'text/html': ['.html', '.htm'] } }], multiple: false, id: 'planboard' });
+      [h] = await window.showOpenFilePicker({ types: [{ description: 'PLANkton plan (HTML)', accept: { 'text/html': ['.html', '.htm'] } }], multiple: false, id: 'plankton' });
     } catch (e) {
       if (e && e.name === 'AbortError') return undefined;
       return toast(`Could not open the file: ${(e && e.message) || e}`, 'error');
@@ -10036,7 +10184,7 @@ function boot(sourceHtml) {
     } catch (e) {
       return toast(`Could not read “${h.name}”.`, 'error');
     }
-    if (!payload || !payload.plan) return toast(`“${h.name}” is not a saved planboard file.`, 'error', 6000);
+    if (!payload || !payload.plan) return toast(`“${h.name}” is not a saved PLANkton file.`, 'error', 6000);
     if (payload.plan.id !== store.plan.id) {
       if (await confirmBox(`“${h.name}” holds a different plan (“${payload.plan.name || 'untitled'}”). Open it as a plan in this browser? Save then writes to the file you are viewing, not to “${h.name}”.`, { ok: 'Open plan' })) importText(text, h.name);
       return undefined;
@@ -10167,7 +10315,7 @@ function boot(sourceHtml) {
     );
     if (ro) items.push({ label: 'Unlock editing', action: unlock });
     else items.push({ label: 'Load sample plan', action: () => addPlan(samplePlan()) });
-    items.push({ label: 'Keyboard shortcuts & help', hint: '?', action: showHelp });
+    items.push({ label: 'Keyboard shortcuts & help', hint: '?', action: showHelp }, { label: `About ${APP_NAME}`, action: showAbout });
     openMenu(anchor, items, { label: 'File' });
   }
 
@@ -10570,9 +10718,17 @@ ${f ? '' : `<label class="fld">Type<select class="cf-type">${FIELD_TYPES.map((x)
       ['Columns', 'Drag a column header to reorder it. Columns ▾ → Manage columns for keyboard reordering, custom columns and visibility'],
     ];
     modal({
-      title: 'Keyboard shortcuts & tips',
+      title: `${APP_NAME}: keyboard shortcuts & tips`,
       wide: true,
-      body: `<table class="kbd-table">${rows.map(([k, v]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(v)}</td></tr>`).join('')}</table><h3 class="help-h">How to share</h3><ol class="help-share"><li>Put this .html file on OneDrive, Teams or SharePoint (or any shared folder).</li><li>Open it in Edge or Chrome, for example from the synced OneDrive folder.</li><li>Edit, then press <b>Save</b> (${esc(K)}+S). The first time, pick the original file once (or use File › Open & connect file…); after that Save writes straight to it. Every Save adds a version to File › Version history.</li><li>In Safari or Firefox, Save downloads an updated copy: replace the original file with it.</li></ol><p class="hint">Edits are also autosaved in this browser (localStorage) as a safety net. Export JSON for backups; File → Export read-only presenter copy makes a version others cannot edit.</p>`,
+      body: `<table class="kbd-table">${rows.map(([k, v]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(v)}</td></tr>`).join('')}</table><h3 class="help-h">How to share</h3><ol class="help-share"><li>Put this .html file on OneDrive, Teams or SharePoint (or any shared folder).</li><li>Open it in Edge or Chrome, for example from the synced OneDrive folder.</li><li>Edit, then press <b>Save</b> (${esc(K)}+S). The first time, pick the original file once (or use File › Open & connect file…); after that Save writes straight to it. Every Save adds a version to File › Version history.</li><li>In Safari or Firefox, Save downloads an updated copy: replace the original file with it.</li></ol><p class="hint">Edits are also autosaved in this browser (localStorage) as a safety net. Export JSON for backups; File → Export read-only presenter copy makes a version others cannot edit.</p><p class="hint">${APP_NAME} ${esc(appVersion())} · works offline, no data leaves this computer.</p>`,
+      actions: [{ label: 'Close', value: 'cancel', primary: true }],
+    });
+  }
+
+  function showAbout() {
+    modal({
+      title: `About ${APP_NAME}`,
+      body: `<div class="about"><span class="about-mark" aria-hidden="true">${brandMark()}</span><div><p class="about-name"><b>PLAN</b>kton <span class="about-ver">${esc(appVersion())}</span></p><p>A project planner in a single file: tasks, sections, dependencies, Gantt, Board and Logs.</p></div></div><p>${APP_NAME} works offline. Your plans stay on this computer: inside this .html file when you Save, and in this browser's storage as a safety net. Nothing is sent anywhere and there is no tracking.</p><p>To share a plan, send the saved .html file. Newer versions: <a href="https://github.com/bioztar/plankton" target="_blank" rel="noopener noreferrer">github.com/bioztar/plankton</a></p>`,
       actions: [{ label: 'Close', value: 'cancel', primary: true }],
     });
   }
@@ -10798,7 +10954,7 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
     } else if (store.view === 'board') app.board.render();
     else app.logs.render();
     card.render();
-    document.title = `${store.plan.name} · Planboard`;
+    document.title = `${store.plan.name} · PLANkton`;
   }
 
   app.grid = createGrid(app, q('.grid-pane'));
@@ -10895,7 +11051,8 @@ ${n ? `<button type="button" class="chip conf" data-act="conflicts" aria-haspopu
   if (!store.persistent && !persistent && !store.readOnly) toast('Browser storage is unavailable (private mode?): changes will not be saved. Use Export JSON.', 'error', 8000);
   if (store.readOnly) toast('Read-only shared copy. Click “Unlock editing” to make changes.', 'info', 5000);
   else app.grid.focus();
-  window.planboard = app;
+  window.plankton = app;
+  window.planboard = app; // pre-1.5 name, kept for existing scripts
   return app;
 }
 return { boot };
