@@ -4,7 +4,7 @@
 .banner[hidden] { display: none; }
 .banner-text { font-weight: 600; }
 .brand { display: flex; align-items: center; gap: 6px; color: var(--accent); line-height: 1; }
-.brand-mark svg { display: block; width: 30px; height: 30px; }
+.brand-mark svg { display: block; width: 34px; height: 34px; margin: -2px 0; }
 .brand-name { font-size: 15px; color: var(--fg); letter-spacing: 0.2px; white-space: nowrap; }
 .brand-name b { font-weight: 800; }
 .plan-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }

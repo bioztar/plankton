@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/brand/plankton-logo.svg" alt="PLANkton" width="320">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/plankton-logo-dark.svg">
+    <img src="docs/brand/plankton-logo.svg" alt="PLANkton" width="320">
+  </picture>
 </p>
 
 <p align="center"><b>Plan your project in one file: tasks, a Gantt chart and a board, right in your browser. No sign-up, no install, works offline.</b></p>

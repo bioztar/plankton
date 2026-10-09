@@ -32,7 +32,22 @@ The page carries its plan in `<script type="application/json" id="pb-data">`. Sa
 
 ## Brand artwork
 
-The build reads `docs/brand/plankton-mark.svg` (header and About dialog, inlined as SVG) and `docs/brand/favicon.svg` (inlined as a `data:` URI), so the app keeps working under its strict Content-Security-Policy. To change the artwork, replace those files at the same paths and run `npm run build`. The build rejects SVGs containing scripts, event handlers or external links. `plankton-logo.svg` (mark + wordmark) is used by the README.
+All artwork lives in `docs/brand/`:
+
+| File | Used by |
+| --- | --- |
+| `plankton-mark.svg` | App header and About dialog (inlined as SVG by the build) |
+| `favicon.svg` | Browser tab icon (inlined as a `data:` URI by the build) |
+| `plankton-logo.svg`, `plankton-logo-dark.svg` | README header (light / dark GitHub theme) |
+| `plankton-icon-512.png`, `plankton-icon-1024.png`, `social-preview.png` | App icon and GitHub social preview (not part of the build) |
+
+To swap the artwork:
+
+1. Replace the files in `docs/brand/`, keeping the same file names.
+2. Run `npm run build` (and `npm test`), then commit `docs/brand/` together with the rebuilt `dist/plankton.html`.
+3. If the header mark changed, retake the README screenshots in `docs/img/` (built-in sample plan only).
+
+The app ships as one file under a strict Content-Security-Policy, which is why the build inlines the SVGs instead of linking them. The build rejects SVGs that contain scripts, event handlers or external links, and each file must be a single `<svg>` element.
 
 ## Compatibility with planboard 1.x
 
