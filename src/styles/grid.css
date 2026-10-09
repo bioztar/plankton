@@ -50,7 +50,10 @@
 .drop-line { position: absolute; right: 0; height: 2px; background: var(--accent); z-index: 4; pointer-events: none; }
 .drop-line::before { content: ""; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 .gr.drop-in { box-shadow: inset 0 0 0 2px var(--accent); }
-.dragging .g-rows { cursor: grabbing; }
+/* any drag in progress (rows, cell range, fill): no native text selection; inline editors still select */
+.g-body.no-select, .g-body.no-select * { -webkit-user-select: none; user-select: none; }
+.g-body.no-select .ed { -webkit-user-select: text; user-select: text; }
+.dragging .g-body, .dragging .g-body * { cursor: grabbing !important; }
 .c-name { position: relative; }
 .open-btn { margin-left: auto; flex: none; border: 1px solid var(--line); background: var(--bg); color: var(--accent); border-radius: 5px; font-size: 12px; line-height: 1; padding: 3px 6px; cursor: pointer; opacity: 0; }
 .gr:hover .open-btn, .gr.sel .open-btn, .open-btn:focus-visible { opacity: 1; }
