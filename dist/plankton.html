@@ -1859,7 +1859,19 @@ function textToHtml(text) {
     .map((p) => `<p>${p.split('\n').map((l) => escapeHtml(l)).join('<br>')}</p>`)
     .join('');
 }
-return { safeUrl, renderMarkdown, markdownToHtml, looksLikeMarkdown, textToHtml };
+
+/** Short label for a link cell: the file name at the end of the path, else host + path. */
+function urlLabel(url) {
+  const u = String(url || '').trim();
+  try {
+    const seg = decodeURIComponent(new URL(u).pathname.split('/').filter(Boolean).pop() || '');
+    if (/\.[a-z0-9]{2,5}$/i.test(seg)) return seg;
+  } catch (e) {
+    /* not a URL */
+  }
+  return u.replace(/^https?:\/\//, '');
+}
+return { safeUrl, renderMarkdown, markdownToHtml, looksLikeMarkdown, textToHtml, urlLabel };
 })();
 
 // ---- util/htmlparse.js
@@ -5904,7 +5916,7 @@ const { revealCell, columnBox, pinnedWidth } = __ui_grid_reveal;
 const { clickAction, keyAction } = __ui_grid_edittrigger;
 const { findField, formatValue, setFieldValue } = __model_fields;
 const { descText } = __util_sanitize;
-const { safeUrl } = __util_markdown;
+const { safeUrl, urlLabel } = __util_markdown;
 const { fmtDate, fmtVariance, statusSlug } = __ui_format;
 const { predsText, setTaskField, setPredsFromText } = __model_edit;
 const { isTask } = __model_tree;
@@ -6029,7 +6041,7 @@ function createGrid(app, root) {
     if (v == null || v === '') return '';
     if (f.type === 'url') {
       const href = safeUrl(v);
-      return href ? `<a class="cf-url" href="${esc(href)}" target="_blank" rel="noopener noreferrer" tabindex="-1" title="${esc(href)}">${esc(String(v).replace(/^https?:\/\//, ''))}</a>` : esc(v);
+      return href ? `<a class="cf-url" href="${esc(href)}" target="_blank" rel="noopener noreferrer" tabindex="-1" title="${esc(href)}">${esc(urlLabel(v))}</a>` : esc(v);
     }
     if (f.type === 'date') return esc(fmtDate(v, toYMD(parseISO(store.plan.start))[0]));
     return esc(formatValue(f, v));
