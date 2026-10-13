@@ -210,3 +210,15 @@ export function textToHtml(text) {
     .map((p) => `<p>${p.split('\n').map((l) => escapeHtml(l)).join('<br>')}</p>`)
     .join('');
 }
+
+/** Short label for a link cell: the file name at the end of the path, else host + path. */
+export function urlLabel(url) {
+  const u = String(url || '').trim();
+  try {
+    const seg = decodeURIComponent(new URL(u).pathname.split('/').filter(Boolean).pop() || '');
+    if (/\.[a-z0-9]{2,5}$/i.test(seg)) return seg;
+  } catch (e) {
+    /* not a URL */
+  }
+  return u.replace(/^https?:\/\//, '');
+}

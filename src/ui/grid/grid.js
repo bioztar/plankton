@@ -6,7 +6,7 @@ import { revealCell, columnBox, pinnedWidth } from './reveal.js';
 import { clickAction, keyAction } from './edittrigger.js';
 import { findField, formatValue, setFieldValue } from '../../model/fields.js';
 import { descText } from '../../util/sanitize.js';
-import { safeUrl } from '../../util/markdown.js';
+import { safeUrl, urlLabel } from '../../util/markdown.js';
 import { fmtDate, fmtVariance, statusSlug } from '../format.js';
 import { predsText, setTaskField, setPredsFromText } from '../../model/edit.js';
 import { isTask } from '../../model/tree.js';
@@ -113,7 +113,7 @@ export function createGrid(app, root) {
     if (v == null || v === '') return '';
     if (f.type === 'url') {
       const href = safeUrl(v);
-      return href ? `<a class="cf-url" href="${esc(href)}" target="_blank" rel="noopener noreferrer" tabindex="-1" title="${esc(href)}">${esc(String(v).replace(/^https?:\/\//, ''))}</a>` : esc(v);
+      return href ? `<a class="cf-url" href="${esc(href)}" target="_blank" rel="noopener noreferrer" tabindex="-1" title="${esc(href)}">${esc(urlLabel(v))}</a>` : esc(v);
     }
     if (f.type === 'date') return esc(fmtDate(v, toYMD(parseISO(store.plan.start))[0]));
     return esc(formatValue(f, v));

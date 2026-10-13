@@ -49,3 +49,10 @@ test('escape helpers', () => {
   assert.ok(!j.includes('</script'));
   assert.deepEqual(JSON.parse(j), { s: '</script><script>alert(1)</script>' });
 });
+
+test('urlLabel: file name for document links, host+path otherwise', async () => {
+  const { urlLabel } = await import('../src/util/markdown.js');
+  assert.equal(urlLabel('https://x.sharepoint.com/sites/A/Shared%20Documents/D/GOV-01_Access%20Process_EN.docx?web=1'), 'GOV-01_Access Process_EN.docx');
+  assert.equal(urlLabel('https://example.com/a/b'), 'example.com/a/b');
+  assert.equal(urlLabel('not a url'), 'not a url');
+});
