@@ -76,8 +76,12 @@ test('handle registry: put/get/forget by plan + page; failures never throw', asy
   assert.equal(r.handle, h);
   assert.deepEqual([r.planId, r.name, r.stamp, r.page], ['p1', 'plan.html', 'S1', 'file:///a/plan.html']);
   assert.equal(await reg.get('p2', 'file:///a/plan.html'), null);
-  assert.equal(await reg.get('p1', 'file:///b/plan.html'), null);
+  assert.equal((await reg.get('p1', 'file:///b/plan.html')).handle, h, 'another copy of the same plan finds the last saved file');
+  const h2 = { name: 'other.html' };
+  await reg.put('p1', 'file:///b/plan.html', h2, 'S2');
+  assert.equal((await reg.get('p1', 'file:///a/plan.html')).handle, h, 'exact page wins over the plan fallback');
   await reg.forget('p1', 'file:///a/plan.html');
+  await reg.forget('p1', 'file:///b/plan.html');
   assert.equal(await reg.get('p1', 'file:///a/plan.html'), null);
   const broken = createHandleRegistry({ get: async () => { throw new Error('x'); }, set: async () => { throw new Error('x'); }, del: async () => { throw new Error('x'); } });
   assert.equal(await broken.get('p1', 'u'), null);
@@ -210,10 +214,25 @@ test('saver: remembered handle survives reload; permission prompt granted or den
   assert.equal(h.writes, 2);
   assert.equal(denied.downloads.length, 1);
 
-  const otherPage = setup({ picker: async () => fakeHandle('new.html'), kv, href: 'file:///elsewhere/plan.html' });
-  await otherPage.saver.bind('p1', null);
-  await otherPage.saver.save(req('S4'));
-  assert.equal(otherPage.calls.picker, 1, 'another copy of the file does not reuse the handle');
+  // A fresh copy (e.g. downloaded again from Teams/SharePoint) of the same plan saves
+  // straight into the remembered file, no picker.
+  h.perm = 'granted';
+  const otherPage = setup({ picker: async () => assert.fail('no picker for another copy of the same plan'), kv, href: 'file:///Downloads/plan%20(3).html' });
+  await otherPage.saver.bind('p1', 'S2');
+  assert.equal((await otherPage.saver.save(req('S4'))).status, 'saved');
+  assert.equal(otherPage.calls.picker, 0);
+  assert.equal(h.writes, 3);
+  // ...but if the remembered file moved on since this copy was made, it asks first.
+  const stale = setup({ picker: async () => assert.fail('no picker'), kv, href: 'file:///Downloads/plan%20(4).html', confirm: async () => 'cancel' });
+  await stale.saver.bind('p1', 'S1');
+  assert.equal((await stale.saver.save(req('S5'))).status, 'cancelled');
+  assert.equal(stale.calls.confirm.length, 1);
+  assert.equal(h.writes, 3);
+  // A different plan never reuses it.
+  const otherPlan = setup({ picker: async () => fakeHandle('new.html'), kv, href: 'file:///Downloads/plan%20(3).html' });
+  await otherPlan.saver.bind('p2', null);
+  await otherPlan.saver.save({ ...req('T1'), planId: 'p2' });
+  assert.equal(otherPlan.calls.picker, 1);
 });
 
 test('saver: file changed on disk by someone else -> confirm overwrite / save as / cancel', async () => {
