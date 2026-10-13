@@ -65,6 +65,11 @@ export function handleKey(planId, href) {
   return `${planId}@${pageKey(href)}`;
 }
 
+/** Per-plan fallback key: the file this plan was last saved to, whichever page saved it. */
+export function planKey(planId) {
+  return `${planId}@*`;
+}
+
 /** File name to suggest on first Save: the opened file's own name, else the fallback. */
 export function suggestedFileName(href, fallback) {
   try {
@@ -84,27 +89,36 @@ const within = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(()
  */
 export function createHandleRegistry(kv, ms = 3000) {
   return {
+    // Exact page first; else the file this plan was last saved to from any page — so a
+    // fresh copy (e.g. re-downloaded from Teams/SharePoint each time) still saves in one click.
     async get(planId, href) {
-      try {
-        const r = await within(kv.get(handleKey(planId, href)), ms);
-        return r && r.handle ? r : null;
-      } catch (e) {
-        return null;
+      for (const k of [handleKey(planId, href), planKey(planId)]) {
+        try {
+          const r = await within(kv.get(k), ms);
+          if (r && r.handle) return r;
+        } catch (e) {
+          /* try the next key */
+        }
       }
+      return null;
     },
     async put(planId, href, handle, stamp) {
       try {
-        await within(kv.set(handleKey(planId, href), { planId, page: pageKey(href), handle, name: handle.name || '', stamp: stamp || null }), ms);
+        const rec = { planId, page: pageKey(href), handle, name: handle.name || '', stamp: stamp || null };
+        await within(kv.set(handleKey(planId, href), rec), ms);
+        await within(kv.set(planKey(planId), rec), ms);
         return true;
       } catch (e) {
         return false;
       }
     },
     async forget(planId, href) {
-      try {
-        await within(kv.del(handleKey(planId, href)), ms);
-      } catch (e) {
-        /* ignore */
+      for (const k of [handleKey(planId, href), planKey(planId)]) {
+        try {
+          await within(kv.del(k), ms);
+        } catch (e) {
+          /* ignore */
+        }
       }
     },
   };
@@ -196,7 +210,9 @@ export function createFileSaver(env) {
       ready = env.registry.get(id, env.href).then((rec) => {
         if (planId !== id || !rec) return;
         handle = rec.handle;
-        if (rec.stamp) known.add(rec.stamp);
+        // The last save's version is only "seen" by the page that made it; a different copy
+        // must still pass the on-disk conflict check against its own opened version.
+        if (rec.stamp && rec.page === pageKey(env.href)) known.add(rec.stamp);
       });
       return ready;
     },

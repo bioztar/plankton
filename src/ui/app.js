@@ -622,7 +622,7 @@ export function boot(sourceHtml) {
     const fileName = suggestedFileName(location.href, '');
     const r = await modal({
       title: 'Connect Save to this file',
-      body: `<p><b>Pick this same file once so Save can write to it from now on.</b></p><p>Browsers cannot write to a page's own file without your permission. In the next dialog choose ${fileName ? `“${esc(fileName)}” (already filled in)` : 'the .html file you opened'} and confirm replacing it.</p><p class="hint">Edge / Chrome may offer “Allow on every visit”: choose it and Save never asks again. File › Open & connect file… does the same from an Open dialog.</p>`,
+      body: `<p><b>Pick this same file once so Save can write to it from now on.</b></p><p>Browsers cannot write to a page's own file without your permission. In the next dialog choose ${fileName ? `“${esc(fileName)}” (already filled in)` : 'the .html file you opened'} and confirm replacing it.</p><p>Opened it from Teams or SharePoint? Then pick the plan in your <b>synced OneDrive / Teams folder</b> (not the copy in Downloads). After that, every copy of this plan you open saves straight into that file, and OneDrive uploads it.</p><p class="hint">Edge / Chrome may offer “Allow on every visit”: choose it and Save never asks again. File › Open & connect file… does the same from an Open dialog.</p>`,
       actions: [{ label: 'Cancel', value: 'cancel' }, { label: 'Pick the file…', value: 'ok', primary: true }],
     });
     return r.value === 'ok';
